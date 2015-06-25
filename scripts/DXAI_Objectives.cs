@@ -16,6 +16,7 @@ function AIVisualAcuity::initFromObjective(%task, %objective, %client)
 function AIVisualAcuity::assume(%task, %client)
 {
     // Called when the bot starts the task
+    %task.setMonitorFreq(32);
 }
 
 function AIVisualAcuity::retire(%task, %client)
@@ -28,21 +29,21 @@ function AIVisualAcuity::weight(%task, %client)
     %task.setWeight(999);
 }
 
-function AIConnection::visualAcuityUpdate(%this)
+function AIVisualAcuity::monitor(%task, %client)
 {
-    // Called when the bot is performing the task
-    if (%this.enableVisualDebug)
+ // Called when the bot is performing the task
+    if (%client.enableVisualDebug)
     {
-        if (!isObject(%this.originMarker))
+        if (!isObject(%client.originMarker))
         {
-            %this.originMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %this.team; name = %this.namebase SPC " Origin"; };
-            %this.clockwiseMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %this.team; name = %this.namebase SPC " Clockwise"; };
-            %this.counterClockwiseMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %this.team; name = %this.namebase SPC " Counter Clockwise"; };
-            %this.upperMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %this.team; name = %this.namebase SPC " Upper"; };
-            %this.lowerMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %this.team; name = %this.namebase SPC " Lower"; };
+            %client.originMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %client.team; name = %client.namebase SPC " Origin"; };
+            %client.clockwiseMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %client.team; name = %client.namebase SPC " Clockwise"; };
+            %client.counterClockwiseMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %client.team; name = %client.namebase SPC " Counter Clockwise"; };
+            %client.upperMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %client.team; name = %client.namebase SPC " Upper"; };
+            %client.lowerMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %client.team; name = %client.namebase SPC " Lower"; };
         }
             
-        %viewCone = %this.calculateViewCone();
+        %viewCone = %client.calculateViewCone();
         %coneOrigin = getWords(%viewCone, 0, 2);
         %viewConeClockwiseVector = getWords(%viewCone, 3, 5);
         %viewConeCounterClockwiseVector = getWords(%viewCone, 6, 8);
@@ -51,28 +52,28 @@ function AIConnection::visualAcuityUpdate(%this)
         %viewConeLowerVector = getWords(%viewCone, 12, 14);
         
         // Update all the markers
-        %this.clockwiseMarker.setPosition(%viewConeClockwiseVector);
-        %this.counterClockwiseMarker.setPosition(%viewConeCounterClockwiseVector);
-        %this.upperMarker.setPosition(%viewConeUpperVector);
-        %this.lowerMarker.setPosition(%viewConeLowerVector);
-        %this.originMarker.setPosition(%coneOrigin);
+        %client.clockwiseMarker.setPosition(%viewConeClockwiseVector);
+        %client.counterClockwiseMarker.setPosition(%viewConeCounterClockwiseVector);
+        %client.upperMarker.setPosition(%viewConeUpperVector);
+        %client.lowerMarker.setPosition(%viewConeLowerVector);
+        %client.originMarker.setPosition(%coneOrigin);
     }
-    else if (isObject(%this.originMarker))
+    else if (isObject(%client.originMarker))
     {
-        %this.originMarker.delete();
-        %this.clockwiseMarker.delete();
-        %this.counterClockwiseMarker.delete();
-        %this.upperMarker.delete();
-        %this.lowerMarker.delete();
+        %client.originMarker.delete();
+        %client.clockwiseMarker.delete();
+        %client.counterClockwiseMarker.delete();
+        %client.upperMarker.delete();
+        %client.lowerMarker.delete();
     }
     
-    %result = %this.getObjectsInViewcone($TypeMasks::ProjectileObjectType | $TypeMasks::PlayerObjectType, %this.viewDistance, true);
+    %result = %client.getObjectsInViewcone($TypeMasks::ProjectileObjectType | $TypeMasks::PlayerObjectType, %client.viewDistance, true);
     
     // What can we see?
     for (%i = 0; %i < %result.getCount(); %i++)
     {
         %current = %result.getObject(%i);
-        %this.awarenessTicks[%current]++;
+        %client.awarenessTicks[%current]++;
         
         if (%current.getType() & $TypeMasks::ProjectileObjectType)
         {   
@@ -80,7 +81,7 @@ function AIConnection::visualAcuityUpdate(%this)
             // We pick a random notice time between 700ms and 1200 ms
             // Obviously this timer runs on a 32ms tick, but it should help provide a little unpredictability
             %noticeTime = getRandom(700, 1200);
-            if (%this.awarenessTicks[%current] < (%noticeTime / 32))
+            if (%client.awarenessTicks[%current] < (%noticeTime / 32))
                 continue;
             
             %className = %current.getClassName();
@@ -96,9 +97,9 @@ function AIConnection::visualAcuityUpdate(%this)
                 %hitObject = getWord(%raycast, 0);
                                 
                 // We're set for a direct hit on us!
-                if (%hitObject == %this.player)
+                if (%hitObject == %client.player)
                 {
-                    %this.setDangerLocation(%current.getPosition(), 30);
+                    %client.setDangerLocation(%current.getPosition(), 30);
                     continue;
                 }
                 
@@ -108,11 +109,11 @@ function AIConnection::visualAcuityUpdate(%this)
                 
                 // How close is the hit loc?
                 %hitLocation = getWords(%rayCast, 1, 3);
-                %hitDistance = vectorDist(%this.player.getPosition(), %hitLocation);
+                %hitDistance = vectorDist(%client.player.getPosition(), %hitLocation);
                 
                 // Is it within the radius damage of this thing?
                 if (%hitDistance <= %current.getDatablock().damageRadius)
-                    %this.setDangerLocation(%current.getPosition(), 30);
+                    %client.setDangerLocation(%current.getPosition(), 30);
             }
             // A little bit harder to detect.
             else if (%className $= "GrenadeProjectile")
@@ -124,41 +125,18 @@ function AIConnection::visualAcuityUpdate(%this)
         else if (%current.getType() & $TypeMasks::PlayerObjectType)
         {
             // ... if the moron is right there in our LOS then we probably should see them
-            %start = %this.player.getPosition();
-            %end = vectorAdd(%start, vectorScale(%this.player.getEyeVector(), %this.viewDistance));
+            %start = %client.player.getPosition();
+            %end = vectorAdd(%start, vectorScale(%client.player.getEyeVector(), %client.viewDistance));
             
-            %rayCast = containerRayCast(%start, %end, -1, %this.player);     
+            %rayCast = containerRayCast(%start, %end, -1, %client.player);     
             %hitObject = getWord(%raycast, 0);
             
             echo(%hitObject);
             echo(%current);
             if (%hitObject == %current)
-                %this.stepEngage(%current);
+                %client.stepEngage(%current);
         }
     }
     
     %result.delete();
-}
-
-function AIConnection::enhancedLogicUpdate(%this)
-{
-    cancel(%this.enhancedLogicHandle);
-    
-    //if (!isObject(%this.))
-    
-    if (!isObject(%this.player))
-    {
-        %this.enhancedLogicHandle = %this.schedule(32, "enhancedLogicUpdate");
-        return;
-    }
-    
-    %this.visualAcuityUpdate();
-    %this.enhancedLogicHandle = %this.schedule(32, "enhancedLogicUpdate");
-}
-
-function AIVisualAcuity::monitor(%task, %client)
-{
-    return;
-    
- 
 }

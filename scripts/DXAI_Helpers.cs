@@ -155,6 +155,13 @@ function GameConnection::getObjectsInViewcone(%this, %typeMask, %distance, %perf
     return %result;
 }
 
+function vectorMultiply(%vec1, %vec2)
+{
+    return (getWord(%vec1, 0) * getWord(%vec2, 0)) SPC 
+    (getWord(%vec1, 1) * getWord(%vec2, 1)) SPC 
+    (getWord(%vec1, 2) * getWord(%vec2, 2));
+}
+
 // If the map editor was instantiated, this will prevent a little bit
 // of console warnings
 function Terraformer::getType(%this) { return 0; }

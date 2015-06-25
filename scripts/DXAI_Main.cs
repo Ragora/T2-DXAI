@@ -118,7 +118,7 @@ function DXAI::validateEnvironment()
         {
             error("DXAI: Function 'DefaultGame::AIChooseGameObjective' detected to be overwritten by the current gamemode. Correcting ...");
             
-            eval(%strReplace(%payloadTemplate, "<METHODNAME>", "AIChooseGameObjective"));
+            eval(strReplace(%payloadTemplate, "<METHODNAME>", "AIChooseGameObjective"));
             
             // Make sure the patch took
             if (game.AIChooseGameObjective($DXAI::System::RuntimeDummy) != 11595)
@@ -129,7 +129,7 @@ function DXAI::validateEnvironment()
         {
             error("DXAI: Function 'DefaultGame::onAIRespawn' detected to be overwritten by the current gamemode. Correcting ... ");
             
-            eval(%strReplace(%payloadTemplate, "<METHODNAME>", "onAIRespawn"));
+            eval(strReplace(%payloadTemplate, "<METHODNAME>", "onAIRespawn"));
             
             if (game.onAIRespawn($DXAI::System::RuntimeDummy) != 11595)
                 error("DXAI: Failed to patch 'DefaultGame::onAIRespawn'! DXAI may not function correctly.");
@@ -212,6 +212,14 @@ package DXAI_Hooks
         DXAI::update();
     }
     
+    // Listen server fix
+    function disconnect()
+    {
+        parent::disconnect();
+        
+        DXAI::Cleanup();
+    }
+    
     function DefaultGame::AIChangeTeam(%game, %client, %newTeam)
     {
         // Remove us from the old commander's control first
@@ -250,13 +258,13 @@ package DXAI_Hooks
         parent::onExplode(%data, %proj, %pos, %mod);
         
         // Look for any bots nearby
-        InitContainerRadiusSearch(%pos, 10, $TypeMasks::PlayerObjectType);
+        InitContainerRadiusSearch(%pos, 100, $TypeMasks::PlayerObjectType);
         
         while ((%targetObject = containerSearchNext()) != 0)
         {
             %currentDistance = containerSearchCurrRadDamageDist();
             
-            if (%currentDistance > 10 || !%targetObject.client.isAIControlled())
+            if (%currentDistance > 100 || !%targetObject.client.isAIControlled())
                 continue;
                   
             // Get the projectile team
@@ -276,12 +284,12 @@ package DXAI_Hooks
             %heardHit = false;
             %hitDistance = vectorDist(%targetObject.getWorldBoxCenter(), %pos);
             
-            if (%hitDistance < 55 && %hitDistance <= %data.explosion.soundProfile.description.maxDistance)
+            if (%hitDistance <= 20 && %hitDistance <= %data.explosion.soundProfile.description.maxDistance)
                 %heardHit = true;
                 
             // If the thing has any radius damage (and we heard it), run around a little bit if we need to
-            if (%data.indirectDamage != 0 && %shouldRun)
-                %targetObject.client.setDangerLocation(%pos, 20);
+            if (%data.indirectDamage != 0 && %heardHit)
+                %targetObject.client.schedule(getRandom(250, 400), "setDangerLocation", %pos, 20);
             
             // If we should care and it wasn't a teammate projectile, notify
             if (%shouldRun && %projectileTeam != %targetObject.client.team)

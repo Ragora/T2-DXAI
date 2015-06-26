@@ -297,6 +297,15 @@ package DXAI_Hooks
         }
     }
     
+    function CreateServer(%mission, %missionType)
+    {   
+        // Perform the default exec's
+        parent::CreateServer(%mission, %missionType);
+        
+        // Ensure that the DXAI is active.
+        $DXAI::System::InvalidatedEnvironment = true;
+    }
+    
     // Make this do nothing so the bots don't ever get any objectives by default
     function DefaultGame::AIChooseGameObjective(%game, %client) { return 11595; }
     

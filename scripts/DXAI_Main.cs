@@ -303,11 +303,8 @@ package DXAI_Hooks
     function DefaultGame::onAIRespawn(%game, %client)
     {
         // Make sure the bot has no objectives
-        %client.reset();
-        %client.defaultTasksAdded = true;
-        
-        // All bots have this task, see DXAI_Objectives.cs
-        %client.addTask("AIVisualAcuity");
+       // %client.reset();
+      //  %client.defaultTasksAdded = true;
         
         return 11595;
     }

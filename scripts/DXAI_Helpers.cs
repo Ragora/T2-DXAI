@@ -155,6 +155,14 @@ function GameConnection::getObjectsInViewcone(%this, %typeMask, %distance, %perf
     return %result;
 }
 
+function getRandomPosition(%position, %distance)
+{
+    // First, we determine a random direction vector
+    %direction = vectorNormalize(getRandom(0, 10000) SPC getRandom(0, 10000) SPC getRandom(0, 10000));
+    // Return the scaled result
+    return vectorAdd(%position, vectorScale(%direction, getRandom(0, %distance)));
+}
+
 function vectorMultiply(%vec1, %vec2)
 {
     return (getWord(%vec1, 0) * getWord(%vec2, 0)) SPC 

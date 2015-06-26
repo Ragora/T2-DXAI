@@ -1,4 +1,4 @@
-// DXAI_Helpers.cs
+// helpers.cs
 // Helper functions for the AI System
 // Copyright (c) 2014 Robert MacGregor
 
@@ -161,6 +161,12 @@ function getRandomPosition(%position, %distance)
     %direction = vectorNormalize(getRandom(0, 10000) SPC getRandom(0, 10000) SPC getRandom(0, 10000));
     // Return the scaled result
     return vectorAdd(%position, vectorScale(%direction, getRandom(0, %distance)));
+}
+
+function getRandomPositionOnTerrain(%position, %distance)
+{
+    %result = getRandomPosition(%position, %distance);
+    return setWord(%result, 2, getTerrainHeight(%result));
 }
 
 function vectorMultiply(%vec1, %vec2)

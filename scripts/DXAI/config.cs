@@ -1,4 +1,4 @@
-// DXAI_Config.cs
+// config.cs
 // Configuration for the DXAI System
 // Copyright (c) 2014 Robert MacGregor
 

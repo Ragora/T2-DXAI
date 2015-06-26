@@ -1,70 +1,17 @@
-// DXAI_Main.cs
-// Experimental AI System for ProjectR3
+//------------------------------------------------------------------------------------------
+// main.cs
+// Main source file for the DXAI experimental AI enhancement project.
+// https://github.com/Ragora/T2-DXAI.git
+//
 // Copyright (c) 2014 Robert MacGregor
+// This software is licensed under the MIT license. Refer to LICENSE.txt for more information.
+//------------------------------------------------------------------------------------------
 
-exec("scripts/Server/DXAI_Objectives.cs");
-exec("scripts/Server/DXAI_Helpers.cs");
-exec("scripts/Server/DXAI_Config.cs");
-
-$DXAI::ActiveCommanderCount = 2;
-
-// AICommander
-// This is a script object that exists for every team in a given
-// gamemode and performs the coordination of bots in the game.
-
-function AICommander::notifyPlayerDeath(%this, %killed, %killedBy)
-{
-}
-
-function AICommander::setup(%this)
-{    
-    %this.botList = new Simset();
-    %this.idleBotList = new Simset();
-    
-    for (%iteration = 0; %iteration < ClientGroup.getCount(); %iteration++)
-    {
-        %currentClient = ClientGroup.getObject(%iteration);
-        
-        if (%currentClient.team == %this.team && %currentClient.isAIControlled())
-        {
-            %this.botList.add(%currentClient);
-            %this.idleBotList.add(%currentClient);
-            
-            %currentClient.commander = %this;
-        }
-    }
-}
-
-function AICommander::removeBot(%this, %bot)
-{
-    %this.botList.remove(%bot);
-    %this.idleBotList.remove(%bot);
-    
-    %bot.commander = -1;
-}
-
-function AICommander::addBot(%this, %bot)
-{
-    if (!%this.botList.isMember(%bot))
-        %this.botList.add(%bot);
-    
-    if (!%this.idleBotList.isMember(%bot))
-        %this.idleBotList.add(%bot);
-    
-    %bot.commander = %this;
-}
-
-function AICommander::cleanup(%this)
-{
-    %this.botList.delete();
-    %this.idleBotList.delete();
-}
-
-function AICommander::update(%this)
-{
-    for (%iteration = 0; %iteration < %this.botList.getCount(); %iteration++)
-        %this.botList.getObject(%iteration).update();
-}
+exec("scripts/DXAI/objectives.cs");
+exec("scripts/DXAI/helpers.cs");
+exec("scripts/DXAI/config.cs");
+exec("scripts/DXAI/aicommander.cs");
+exec("scripts/DXAI/aiconnection.cs");
 
 // General DXAI API implementations
 function DXAI::cleanup()
@@ -160,39 +107,6 @@ function DXAI::notifyPlayerDeath(%killed, %killedBy)
     for (%iteration = 1; %iteration < $DXAI::ActiveCommanderCount + 1; %iteration++)
         $DXAI::ActiveCommander[%iteration].notifyPlayerDeath(%killed, %killedBy);
 }
-
-// AIPlayer
-// This is a script object that contains DXAI functionality on a per-soldier
-// basis
-function AIConnection::initialize(%this, %aiClient)
-{
-    %this.fieldOfView = 3.14 / 2; // 90* View cone
-    %this.viewDistance = 300;
-    
-    if (!isObject(%aiClient))
-        error("AIPlayer: Attempted to initialize with bad AI client connection!");
-        
-    %this.client = %aiClient;
-}
-
-function AIConnection::update(%this)
-{
-}
-
-function AIConnection::notifyProjectileImpact(%this, %data, %proj, %position)
-{
-    if (!isObject(%proj.sourceObject) || %proj.sourceObject.client.team == %this.team)
-        return;
-}
-
-function AIConnection::isIdle(%this)
-{
-    if (!isObject(%this.commander))
-        return true;
-    
-    return %this.commander.idleBotList.isMember(%this);
-}
-
 
 // Hooks for the AI System
 package DXAI_Hooks
@@ -297,13 +211,15 @@ package DXAI_Hooks
         }
     }
     
+    // The CreateServer function is hooked so that we can try and guarantee that the DXAI gamemode hooks still
+    // exist in the runtime. 
     function CreateServer(%mission, %missionType)
     {   
         // Perform the default exec's
         parent::CreateServer(%mission, %missionType);
         
         // Ensure that the DXAI is active.
-        $DXAI::System::InvalidatedEnvironment = true;
+        DXAI::validateEnvironment();
     }
     
     // Make this do nothing so the bots don't ever get any objectives by default
@@ -335,5 +251,6 @@ package DXAI_Hooks
     }
 };
 
+// Only activate the package if it isn't already active.
 if (!isActivePackage(DXAI_Hooks))
     activatePackage(DXAI_Hooks);

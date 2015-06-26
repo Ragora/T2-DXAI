@@ -1,12 +1,47 @@
-// DXAI_Objectives.cs
-// Objectives for the AI system
+//------------------------------------------------------------------------------------------
+// aiconnection.cs
+// Source file declaring the custom AIConnection methods used by the DXAI experimental
+// AI enhancement project.
+// https://github.com/Ragora/T2-DXAI.git
+//
 // Copyright (c) 2014 Robert MacGregor
+// This software is licensed under the MIT license. 
+// Refer to LICENSE.txt for more information.
+//------------------------------------------------------------------------------------------
 
-//----------------------------------------------------------------------
-// The AIVisualAcuity task is a complementary task for the AI grunt systems
-// to perform better at recognizing things visually with reasonably
-// Human perception capabilities.
-// ---------------------------------------------------------------------
+function AIConnection::initialize(%this, %aiClient)
+{
+    %this.fieldOfView = 3.14 / 2; // 90* View cone
+    %this.viewDistance = 300;
+    
+    if (!isObject(%aiClient))
+        error("AIPlayer: Attempted to initialize with bad AI client connection!");
+        
+    %this.client = %aiClient;
+}
+
+function AIConnection::update(%this)
+{
+    if (isObject(%this.player) && %this.player.getMoveState() $= "walk")
+    {
+        %this.updateLegs();
+        %this.updateVisualAcuity();
+    }
+}
+
+function AIConnection::notifyProjectileImpact(%this, %data, %proj, %position)
+{
+    if (!isObject(%proj.sourceObject) || %proj.sourceObject.client.team == %this.team)
+        return;
+}
+
+function AIConnection::isIdle(%this)
+{
+    if (!isObject(%this.commander))
+        return true;
+    
+    return %this.commander.idleBotList.isMember(%this);
+} 
 
 function AIConnection::updateLegs(%this)
 {
@@ -17,6 +52,8 @@ function AIConnection::updateLegs(%this)
         
         if (%this.aimAtLocation)
             %this.aimAt(%this.moveLocation);
+        else if(%this.manualAim)
+            %this.aimAt(%this.aimLocation);
     }
     else
     {
@@ -128,9 +165,7 @@ function AIConnection::updateVisualAcuity(%this)
             
             %rayCast = containerRayCast(%start, %end, -1, %this.player);     
             %hitObject = getWord(%raycast, 0);
-            
-          //  echo(%hitObject);
-           // echo(%current);
+
             if (%hitObject == %current)
             {
                 %this.clientDetected(%current);
@@ -141,155 +176,3 @@ function AIConnection::updateVisualAcuity(%this)
     
     %result.delete();
 }
-
-function AIConnection::enhancedLogicLoop(%this)
-{
-    cancel(%this.enhancedLogicHandle);
-    
-    if (isObject(%this.player))
-    {
-        %this.updateVisualAcuity();
-        %this.updateLegs();
-    }
-    
-    %this.enhancedLogicHandle = %this.schedule(32, "enhancedLogicLoop");
-}
-
-//-------------------------------------------------------------
-function AIEnhancedDefendLocation::initFromObjective(%task, %objective, %client)
-{
-    // Called to initialize from an objective object
-}
-
-function AIEnhancedDefendLocation::assume(%task, %client)
-{
-    // Called when the bot starts the task
-    %task.setMonitorFreq(1);
-}
-
-function AIEnhancedDefendLocation::retire(%task, %client)
-{
-    // Called when the bot stops the task
-}
-
-function AIEnhancedDefendLocation::weight(%task, %client)
-{
-    %task.setWeight(1000);
-}
-
-function AIEnhancedDefendLocation::monitor(%task, %client)
-{   
-   // echo(%task.getMonitorFreq());
-    if (%client.getPathDistance(%client.defendLocation) <= 40)
-    {
-        // Pick a random time to move to a nearby location
-        if (%client.defendTime == -1)
-        {
-            %client.nextDefendRotation = getRandom(5000, 10000);
-            %client.isMoving = false;
-        }
-        
-        // If we're near our random point, just don't move
-        if (%client.getPathDistance(%client.moveLocation) <= 10)
-            %client.isMoving = false;
-            
-        %client.defendTime += 32;
-        if (%client.defendTime >= %client.nextDefendRotation)
-        {
-            %client.defendTime = 0;
-            %client.nextDefendRotation = getRandom(5000, 10000);
-            
-            // TODO: Replace with something that detects interiors as well
-            %randomPosition = getRandomPosition(%client.defendLocation, 40);
-            %randomPosition = getWords(%randomPosition, 0, 1) SPC getTerrainHeight(%randomPosition);
-                        
-            %client.moveLocation = %randomPosition;
-            %client.isMoving = true;
-        }
-    }
-    else
-    {
-        %client.defendTime = -1;
-        %client.moveLocation = %client.defendLocation;
-        %client.isMoving = true;
-    }
-}
-
-//-------------------------------------------------------------
-function AIEnhancedScoutLocation::initFromObjective(%task, %objective, %client)
-{
-    // Called to initialize from an objective object
-}
-
-function AIEnhancedScoutLocation::assume(%task, %client)
-{
-    // Called when the bot starts the task
-    %task.setMonitorFreq(1);
-    
-    %client.currentNode = -1;
-}
-
-function AIEnhancedScoutLocation::retire(%task, %client)
-{
-    // Called when the bot stops the task
-}
-
-function AIEnhancedScoutLocation::weight(%task, %client)
-{
-    %task.setWeight(1000);
-}
-
-function AIEnhancedScoutLocation::monitor(%task, %client)
-{   
-    // We can't really work without a NavGraph
-    if (!isObject(NavGraph))
-        return;
-    
-    // We just received the task, so find a node within distance of our scout location
-    if (%client.currentNode == -1)
-    {
-        %client.currentNode = NavGraph.randNode(%client.scoutLocation, %client.scoutDistance, true, true);
-        
-        if (%client.currentNode != -1)
-        {
-            %client.moveLocation = NavGraph.nodeLoc(%client.currentNode);
-            %client.isMoving = true;
-        }
-    }
-    // We're moving, or are near enough to our target
-    else
-    {
-        // Don't move if we're close enough to our next node
-        if (%client.getPathDistance(%client.moveLocation) <= 40)
-        {
-            %client.isMoving = false;
-            %client.nextScoutRotation = getRandom(5000, 10000);
-            %client.scoutTime += 32;
-        }
-        else
-        {
-            %client.isMoving = true;
-            %client.scoutTime += 0;
-        }
-        
-        // Wait a little bit at each node
-        if (%client.scoutTime >= %client.nextScoutRotation)
-        {
-            %client.scoutTime = 0;
-            %client.nextScoutRotation = getRandom(5000, 10000);
-
-            // Pick a new node
-            %client.currentNode = NavGraph.randNode(%client.scoutLocation, %client.scoutDistance, true, true);
-            
-            // Ensure that we found a node.
-            if (%client.currentNode != -1)
-            {
-                %client.moveLocation = NavGraph.nodeLoc(%client.currentNode);
-                %client.isMoving = true;
-            }
-        }
-    }
-    
-}
-
-//-------------------------------------------------------------

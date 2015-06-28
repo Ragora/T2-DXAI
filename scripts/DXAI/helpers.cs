@@ -13,6 +13,14 @@ function sameSide(%p1, %p2, %a, %b)
     return false;
 }
 
+function SimSet::contains(%this, %contained)
+{
+    for (%iteration = 0; %iteration < %this.getCount(); %iteration++)
+        if (%this.getObject(%iteration) == %contained)
+            return true;
+    return false;
+}
+
 function pointInTriangle(%point, %a, %b, %c)
 {
     if (sameSide(%point, %a, %b, %c) && sameSide(%point, %b, %a, %c) && sameSide(%point, %c, %a, %b))

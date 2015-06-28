@@ -12,6 +12,8 @@ exec("scripts/DXAI/helpers.cs");
 exec("scripts/DXAI/config.cs");
 exec("scripts/DXAI/aicommander.cs");
 exec("scripts/DXAI/aiconnection.cs");
+exec("scripts/DXAI/priorityqueue.cs");
+exec("scripts/DXAI/cyclicset.cs");
 
 // General DXAI API implementations
 function DXAI::cleanup()
@@ -89,6 +91,9 @@ function DXAI::update()
 {
     if (isEventPending($DXAI::updateHandle))
         cancel($DXAI::updateHandle);
+    
+    if (!isObject(Game))
+        return;
     
     // Check if the bound functions are overwritten by the current gamemode, or if something
     // may have invalidated our hooks

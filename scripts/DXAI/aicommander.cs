@@ -9,26 +9,22 @@
 
 $DXAI::ActiveCommanderCount = 2;
 
-$DXAI::Priorities::DefendGenerator = 1;
-$DXAI::Priorities::DefendFlag = 2;
-$DXAI::Priorities::ScoutBase = 3;
+$DXAI::Priorities::DefendGenerator = 0;
+$DXAI::Priorities::DefendFlag = 1;
+$DXAI::Priorities::ScoutBase = 2;
 //-----------------------------------------------
 $DXAI::Priorities::CaptureFlag = 4;
 $DXAI::Priorities::CaptureObjective = 5;
 $DXAI::Priorities::AttackTurret = 6;
 $DXAI::Priorities::Count = 3;
 
-// # of bots assigned = mCeil(((totalPriorityValues / priorityCounts) * priority) / priorityCounts)
-
-// totalPriorityValues = 3 + 2
-// priorityCounts = 2
-// Priority for Gen: 2
-// Priority for Flag: 3
-// flagBots = ((5.0 / 2.0) * 3.0) / 2.0
-// Gen bots = ((5.0 / 2.0) * 2.0) / 2.0
 $DXAI::Priorities::DefaultPriorityValue[$DXAI::Priorities::DefendGenerator] = 2;
 $DXAI::Priorities::DefaultPriorityValue[$DXAI::Priorities::DefendFlag] = 3;
 $DXAI::Priorities::DefaultPriorityValue[$DXAI::Priorities::ScoutBase] = 1;
+
+$DXAI::Priorities::Text[$DXAI::Priorities::DefendGenerator] = "Defending a Generator";
+$DXAI::Priorities::Text[$DXAI::Priorities::DefendFlag] = "Defending the Flag";
+$DXAI::Priorities::Text[$DXAI::Priorities::ScoutBase] = "Scouting a Location";
 
 function AICommander::setup(%this)
 {    
@@ -50,9 +46,88 @@ function AICommander::setup(%this)
     
     %this.setDefaultPriorities();
     
-    // Also set the assignment tracker
+    // Also set the assignment tracker and the cyclers for each objective type
     for (%iteration = 0; %iteration < $DXAI::Priorities::Count; %iteration++)
+    {
         %this.assignments[%iteration] = 0;
+        %this.objectiveCycles[%iteration] = CyclicSet::create();
+    }
+}
+
+function AICommander::_skimObjectiveGroup(%this, %group)
+{
+    for (%iteration = 0; %iteration < %group.getCount(); %iteration++)
+    {
+        %current = %group.getObject(%iteration);
+        
+        // We're getting ballsy here, recursion in TS!
+        if (%current.getClassName() $= "SimGroup")
+            %this._skimObjectiveGroup(%current);
+        else
+        {
+            // Which objective type are we looking at?
+            switch$ (%current.getName())
+            {
+                case "AIOAttackObject":
+                case "AIOMortarObject":
+                case "AIODefendLocation":
+                    // FIXME: Console spam from .targetObjectID not being set?
+                    %datablockName = %current.targetObjectID.getDatablock().getName();
+                    
+                    echo(%datablockName);
+                    
+                    // Defending the flag?
+                    if (%datablockName $= "FLAG")
+                        %this.objectiveCycles[$DXAI::Priorities::DefendFlag].add(%current);
+                    else if (%datablockName $="GeneratorLarge")
+                        %this.objectiveCycles[$DXAI::Priorities::DefendGenerator].add(%current);           
+                    
+                case "AIORepairObject":
+                case "AIOTouchObject":
+                case "AIODeployEquipment":
+            }
+        }
+    }
+}
+
+function AICommander::loadObjectives(%this)
+{
+    // First we clear the old cyclers
+    for (%iteration = 0; %iteration < $DXAI::Priorities::Count; %iteration++)
+        %this.objectiveCycles[%iteration].clear();
+    
+    %teamGroup = "Team" @ %this.team;
+    %teamGroup = nameToID(%teamGroup);
+    
+    if (!isObject(%teamGroup))
+        return;
+    
+    // Search this group for something named "AIObjectives". Each team has one, so we can't reliably just use that name
+    %group = %teamGroup;
+    for (%iteration = 0; %iteration < %group.getCount(); %iteration++)
+    {
+        %current = %group.getObject(%iteration);
+        if (%current.getClassName() $= "SimGroup" && %current.getName() $= "AIObjectives")
+        {
+            %group = %current;
+            break;
+        }
+    }
+    
+    if (%group == %teamGroup)
+        return;
+    
+    // Now that we have our objective set, skim it for anything usable
+    %this._skimObjectiveGroup(%group);
+    
+    // We also need to determine some locations for objectives not involved in the original game, such as the AIEnhancedScout task.
+    
+    // Simply create a scout objective on the flag with a distance of 100m
+    %scoutLocationObjective = new ScriptObject() { distance = 100; };
+    %defendFlagObjective = %this.objectiveCycles[$DXAI::Priorities::DefendFlag].next();
+    %scoutLocationObjective.location = %defendFlagObjective.location;
+    
+    %this.objectiveCycles[$DXAI::Priorities::ScoutBase].add(%scoutLocationObjective);
 }
 
 function AICommander::assignTasks(%this)
@@ -76,11 +151,13 @@ function AICommander::assignTasks(%this)
         %botAssignments[%iteration] = mCeil(((%totalPriority / $DXAI::Priorities::Count) * %this.priorities[%iteration]) / $DXAI::Priorities::Count);
         %botAssignments[%iteration] -= %this.botAssignments[%iteration]; // If we already have bots doing this, then we don't need to replicate them
         %botCountRequired += %botAssignments[%iteration];
-        
         if (%botAssignments[%iteration] < 0)
             %lostBots = true;
         else
-            %priorityQueue.add(%iteration, %botAssignments[%iteration]);
+        {
+            %priorityQueue.add(%botAssignments[%iteration], %iteration);
+            echo(%botAssignments[%iteration] SPC " bots on task " @ $DXAI::Priorities::Text[%iteration]);
+        }
     }
     
     // Deassign from objectives we need less bots for now and put them into the idle list
@@ -89,7 +166,7 @@ function AICommander::assignTasks(%this)
     for (%taskIteration = 0; %lostBots && %taskIteration < $DXAI::Priorities::Count; %taskiteration++)
         // Need to ditch some bots
         if (%botAssignments[%taskIteration] < 0)
-            %this.deassignBots(%taskIteration, mAbs(%botAssignments[%taskIteration]);
+            %this.deassignBots(%taskIteration, mAbs(%botAssignments[%taskIteration]));
     
     // Do we have enough idle bots to just shunt everyone into something?
     if (%this.idleBotList.getCount() >= %botCountRequired)
@@ -98,14 +175,14 @@ function AICommander::assignTasks(%this)
             for (%botIteration = 0; %botIteration < %botAssignments[%taskIteration]; %botIteration++)
                 %this.assignTask(%taskIteration, %this.idleBotList.getObject(0));
     }
-    // Okay, we don't have enough bots currently so we'll try to satisify the higher priority objectives first
+    // Okay, we don't have enough bots currently so we'll try to satisfy the higher priority objectives first
     else
         while (!%priorityQueue.isEmpty() && %this.idleBotList.getCount() != 0)
         {
-            %taskID = %priorityQueue.topKey();
-            %requiredBots = %priorityQueue.topValue();
+            %taskID = %priorityQueue.topValue();
+            %requiredBots = %priorityQueue.topKey();
             %priorityQueue.pop();
-            
+
             for (%botIteration = 0; %botIteration < %requiredBots && %this.idleBotList.getCount() != 0; %botIteration++)
                 %this.assignTask(%taskID, %this.idleBotList.getObject(0));
         }
@@ -135,19 +212,27 @@ function AICommander::deassignBots(%this, %taskID, %count)
 function AICommander::assignTask(%this, %taskID, %bot)
 {
     // Don't try to assign if the bot is already assigned something
-    if (!%this.idleBotList.contains(%this))
+    if (!%this.idleBotList.isMember(%bot))
         return;
     
-    %this.idleBotList.remove(%this);
+    %this.idleBotList.remove(%bot);
     
     switch (%taskID)
     {
-        case $DXAI::Priorities::DefendGenerator:
-            break;
-        case $DXAI::Priorities::DefendFlag:
-            break;
+        case $DXAI::Priorities::DefendGenerator or $DXAI::Priorities::DefendFlag:
+            %objective = %this.objectiveCycles[%taskID].next();
+            
+            // Set the bot to defend the location
+            %bot.defendLocation = %objective.location;
+            %bot.addTask("AIEnhancedDefendLocation");
+            
         case $DXAI::Priorities::ScoutBase:
-            break;
+            %objective = %this.objectiveCycles[%taskID].next();
+            
+            // Set the bot to defend the location
+            %bot.scoutLocation = %objective.location;
+            %bot.scoutDistance = %objective.distance;
+            %bot.addTask("AIEnhancedScoutLocation");
     }
     
     %this.botAssignments[%taskID]++;

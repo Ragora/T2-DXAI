@@ -9,21 +9,34 @@
 
 function PriorityQueue::add(%this, %key, %value)
 {
+    // If we already have a key, update it
+    if (%this.hasKey[%key])
+    {
+        %this.values[%this.keyIndex[%key]] = %value;
+        return;
+    }
+        
+    %this.hasKey[%key] = true;
+    
     // Traverse the queue and discover our insertion point
     for (%iteration = 0; %iteration < %this.count; %iteration++)
-        if (%key >= %this.keys[%iteration])
+        if (%key <= %this.keys[%iteration])
         {
+            //%this.count++;
             %this._shift(%iteration, false);
             %this.values[%iteration] = %value;
             %this.keys[%iteration] = %key;
             %this.keyIndex[%key] = %iteration;
-            %this.hasKey[%key] = true;
+            %this.count++;
+            
             return;
         }
     
     // If we never made an insertion, just stick our key and value at the end
     %this.values[%this.count] = %value;
-    %this.keys[%this.count++] = %key;
+    %this.keys[%this.count] = %key;
+    %this.keyIndex[%key] = %this.count;
+    %this.count++;
 }
 
 function PriorityQueue::remove(%this, %key)
@@ -42,17 +55,21 @@ function PriorityQueue::_shift(%this, %index, %isRemoval)
     {
         for (%iteration = %index; %iteration < %this.count; %iteration++)
         {
-            %this.values[%index] = %this.values[%index + 1];
-            %this.keys[%index] = %this.keys[%index + 1;
+            %this.values[%iteration] = %this.values[%iteration + 1];
+            %this.keys[%iteration] = %this.keys[%iteration + 1];
+            
+            %this.keyIndex[%this.keys[%iteration]] = %iteration;
         }
         
         return;
     }
         
-    for (%iteration = %index; %iteration < %this.count; %iteration++)
+    for (%iteration = %this.count; %iteration >= %index; %iteration--)
     {
-        %this.values[%index + 1] = %this.values[%index];
-        %this.keys[%index + 1] = %this.keys[%index];
+        %this.values[%iteration] = %this.values[%iteration - 1];
+        %this.keys[%iteration] = %this.keys[%iteration - 1];
+        
+        %this.keyIndex[%this.keys[%iteration]] = %iteration - 1;
     }
 }
 
@@ -68,6 +85,9 @@ function PriorityQueue::topKey(%this)
 
 function PriorityQueue::pop(%this)
 {
+    if (%this.count == 0)
+        return;
+    
     %this.hasKey[%this.keys[%this.count]] = false;
     %this.count--;
 }
@@ -83,6 +103,12 @@ function PriorityQueue::clear(%this)
 function Priorityqueue::isEmpty(%this)
 {
     return %this.count == 0;
+}
+
+function PriorityQueue::dump(%this)
+{
+    for (%iteration = 0; %iteration < %this.count; %iteration++)
+        echo(%iteration SPC %this.keys[%iteration] SPC "-> " @ %this.values[%iteration]);
 }
 
 function PriorityQueue::create(%name)

@@ -22,7 +22,7 @@ function AIConnection::initialize(%this, %aiClient)
 
 function AIConnection::update(%this)
 {
-    if (isObject(%this.player) && %this.player.getMoveState() $= "walk")
+    if (isObject(%this.player) && %this.player.getState() $= "Move")
     {
         %this.updateLegs();
         %this.updateVisualAcuity();

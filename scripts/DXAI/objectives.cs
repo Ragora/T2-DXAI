@@ -125,18 +125,21 @@ function AIEnhancedScoutLocation::monitor(%task, %client)
     // We're moving, or are near enough to our target
     else
     {
+        %pathDistance = %client.getPathDistance(%client.moveLocation);
         // Don't move if we're close enough to our next node
-        if (%client.getPathDistance(%client.moveLocation) <= 40 && %client.isMoving)
+        if (%pathDistance <= 40 && %client.isMoving)
         {
             %client.isMoving = false;
             %client.nextScoutRotation = getRandom(5000, 10000);
             %client.scoutTime += 32;
         }
-        else
+        else if(%client.getPathDistance(%client.moveLocation) > 40)
         {
             %client.isMoving = true;
             %client.scoutTime = 0;
         }
+        else
+            %client.scoutTime += 32;
         
         // Wait a little bit at each node
         if (%client.scoutTime >= %client.nextScoutRotation)

@@ -44,6 +44,8 @@ function DXAI::setup(%numTeams)
         %commander.setup();
         
         $DXAI::ActiveCommander[%iteration] = %commander;
+        %commander.loadObjectives();
+        %commander.assignTasks();
     }
     
     // And setup the default values
@@ -104,7 +106,7 @@ function DXAI::update()
         $DXAI::ActiveCommander[%iteration].update();
     
     // Apparently we can't schedule a bound function otherwise
-    $DXAI::updateHandle = schedule(32,0,"eval", "DXAI::update();");
+    $DXAI::updateHandle = schedule(32, 0, "eval", "DXAI::update();");
 }
 
 function DXAI::notifyPlayerDeath(%killed, %killedBy)

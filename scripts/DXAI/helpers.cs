@@ -103,6 +103,59 @@ function GameConnection::calculateViewCone(%this, %distance)
     return %coneOrigin SPC %viewConeClockwisePoint SPC %viewConeCounterClockwisePoint SPC %viewConeUpperPoint SPC %viewConeLowerPoint;
 }
 
+function SimSet::recurse(%this, %result)
+{
+  if (!isObject(%result))
+    %result = new SimSet();
+    
+  for (%iteration = 0; %iteration < %this.getCount(); %iteration++)
+  {
+    %current = %this.getObject(%iteration);
+    
+    if (%current.getClassName() $= "SimGroup" || %current.getClassName() $= "SimSet")
+      %current.recurse(%result);
+    else
+      %result.add(%current);
+  }
+  
+  return %result;
+}
+
+// TODO: Use the nav graph to estimate an actual distance?
+function GameConnection::getClosestInventory(%this)
+{
+  if (!isObject(%this.player))
+    return -1;
+    
+  %group = nameToID("Team" @ %this.team);
+  if (!isObject(%group))
+    return -1;
+  
+  %teamObjects = %group.recurse();
+  
+  %closestInventory = -1;
+  %closestInventoryDistance = 9999;
+  for (%iteration = 0; %iteration < %teamObjects.getCount(); %iteration++)
+  {
+    %current = %teamObjects.getObject(%iteration);
+    
+    if (%current.getClassName() $= "StaticShape" && %current.getDatablock().getName() $= "StationInventory")
+    {
+      %inventoryDistance = vectorDist(%current.getPosition(), %this.player.getPosition());
+      
+      if (%inventoryDistance < %closestInventoryDistance)
+      {
+        %closestInventoryDistance = %inventoryDistance;
+        %closestInventory = %current;
+      }
+    }
+  }
+  
+  %teamObjects.delete();
+  
+  return %closestInventory;
+}
+
 // View cone simulation function
 function GameConnection::getObjectsInViewcone(%this, %typeMask, %distance, %performLOSTest)
 {
@@ -194,3 +247,13 @@ $DXAI::System::RuntimeDummy = new ScriptObject(RuntimeDummy) { class = "RuntimeD
 
 function RuntimeDummy::addTask() { }
 function RuntimeDummy::reset() { }
+
+$TypeMasks::InteractiveObjectType = $TypeMasks::PlayerObjectType | $TypeMasks::VehicleObjectType | $TypeMasks::WaterObjectType | $TypeMasks::ProjectileObjectType | $TypeMasks::ItemObjectType | $TypeMasks::CorpseObjectType;
+$TypeMasks::UnInteractiveObjectType = $TypeMasks::StaticObjectType | $TypeMasks::TerrainObjectType | $TypeMasks::InteriorObjectType | $TypeMasks::StaticTSObjectType | $TypeMasks::StaticRenderedObjectType;
+$TypeMasks::BaseAssetObjectType = $TypeMasks::ForceFieldObjectType | $TypeMasks::TurretObjectType | $TypeMasks::SensorObjectType | $TypeMasks::StationObjectType | $TypeMasks::GeneratorObjectType;
+$TypeMasks::GameSupportObjectType = $TypeMasks::TriggerObjectType | $TypeMasks::MarkerObjectType | $TypeMasks::CameraObjectType | $TypeMasks::VehicleBlockerObjectType | $TypeMasks::PhysicalZoneObjectType;
+$TypeMasks::GameContentObjectType = $TypeMasks::ExplosionObjectType | $TypeMasks::CorpseObjectType | $TypeMasks::DebrisObjectType;
+$TypeMasks::DefaultLOSObjectType = $TypeMasks::TerrainObjectType | $TypeMasks::InteriorObjectType | $TypeMasks::StaticObjectType;
+
+// We declare the AllObjectType like this instead of -1 because it seems -1 can sometimes not work?
+$TypeMasks::AllObjectType = $TypeMasks::InteractiveObjectType | $TypeMasks::DefaultLOSObjectType | $TypeMasks::GameContentObjectType | $TypeMasks::GameSupportObjectType | $TypeMasks::BaseAssetObjectType | $TypeMasks::UnInteractiveObjectType; 

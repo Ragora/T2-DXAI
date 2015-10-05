@@ -132,7 +132,22 @@ function AICommander::loadObjectives(%this)
 
 function AICommander::assignTasks(%this)
 {
-    // Calculate how much priority we have total, first
+    // First, assign objectives that all bots should have
+    for (%iteration = 0; %iteration < %this.botList.getCount(); %iteration++)
+    {
+      %bot = %this.botList.getObject(%iteration);
+      %bot.addTask(AIEnhancedEngageTarget);
+      %bot.addTask(AIEnhancedRearmTask);
+      
+      // We only need this task if we're actually playing CTF.
+      if ($CurrentMissionType $= "CTF")
+        %bot.addTask(AIEnhancedReturnFlagTask);
+      
+      %bot.targetLoadout = 0;
+      %bot.shouldRearm = true;
+    }
+    
+    // Calculate how much priority we have total
     %totalPriority = 0.0;
     for (%iteration = 0; %iteration < $DXAI::Priorities::Count; %iteration++)
     {

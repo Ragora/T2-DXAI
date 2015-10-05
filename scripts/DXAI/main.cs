@@ -14,6 +14,7 @@ exec("scripts/DXAI/aicommander.cs");
 exec("scripts/DXAI/aiconnection.cs");
 exec("scripts/DXAI/priorityqueue.cs");
 exec("scripts/DXAI/cyclicset.cs");
+exec("scripts/DXAI/loadouts.cs");
 
 // General DXAI API implementations
 function DXAI::cleanup()
@@ -208,9 +209,13 @@ package DXAI_Hooks
             if (%hitDistance <= 20 && %hitDistance <= %data.explosion.soundProfile.description.maxDistance)
                 %heardHit = true;
                 
-            // If the thing has any radius damage (and we heard it), run around a little bit if we need to
+            // If the thing has any radius damage (and we heard it), run around a little bit if we need to, and look at it for a bit
             if (%data.indirectDamage != 0 && %heardHit)
+            {
                 %targetObject.client.schedule(getRandom(250, 400), "setDangerLocation", %pos, 20);
+                // TODO: Perhaps attempt to discern the direction of fire?
+                %targetObject.client.aimAt(%pos);
+            }
             
             // If we should care and it wasn't a teammate projectile, notify
             if (%shouldRun && %projectileTeam != %targetObject.client.team)
@@ -237,6 +242,8 @@ package DXAI_Hooks
         // Make sure the bot has no objectives
        // %client.reset();
       //  %client.defaultTasksAdded = true;
+        %client.shouldRearm = true;
+        %client.targetLoadout = 1;
         
         return 11595;
     }
@@ -255,6 +262,39 @@ package DXAI_Hooks
     {
         $DXAI::System::InvalidatedEnvironment = true;
         parent::compile(%file);
+    }
+    
+    function AIRespondToEvent(%client, %eventTag, %targetClient)
+    {
+        %clientPos = %client.player.getWorldBoxCenter();
+        //switch$ (%eventTag)
+        //{
+        schedule(250, %targetClient, "AIPlayAnimSound", %targetClient, %clientPos, "cmd.decline", $AIAnimSalute, $AIAnimSalute, 0);
+        schedule(2000, %targetClient, "AIPlayAnimSound", %targetClient, %clientPos, ObjectiveNameToVoice(%targetClient.getTaskName()), $AIAnimSalute, $AIAnimSalute, 0);
+        schedule(3700, %targetClient, "AIPlayAnimSound", %targetClient, %clientPos,  "vqk.sorry", $AIAnimSalute, $AIAnimSalute, 0);
+    }
+    
+    function Station::stationTriggered(%data, %obj, %isTriggered)
+    {
+      parent::stationTriggered(%data, %obj, %isTriggered);
+
+      // TODO: If the bot isn't supposed to be on the station, at least restock ammunition?
+      if (%isTriggered && %obj.triggeredBy.client.isAIControlled() && %obj.triggeredBy.client.shouldRearm)
+      {
+        %bot = %obj.triggeredBy.client;
+          
+        %bot.shouldRearm = false;
+        %bot.player.clearInventory();
+        
+        %bot.player.setArmor($DXAI::Loadouts[%bot.targetLoadout, "Armor"]);
+        %bot.player.setInventory($DXAI::Loadouts[%bot.targetLoadout, "Pack"], 1, true);
+        
+        for (%iteration = 0; %iteration < $DXAI::Loadouts[%bot.targetLoadout, "WeaponCount"]; %iteration++)
+        {
+          %bot.player.setInventory($DXAI::Loadouts[%bot.targetLoadout, "Weapon", %iteration], 1, true);
+          %bot.player.setInventory($DXAI::Loadouts[%bot.targetLoadout, "Weapon", %iteration].Image.Ammo, 999, true); // TODO: Make it actually top out correctly!
+        }
+      }
     }
 };
 

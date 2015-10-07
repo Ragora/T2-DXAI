@@ -241,6 +241,8 @@ function GameConnection::getObjectsInViewcone(%this, %typeMask, %distance, %perf
 
 //------------------------------------------------------------------------------------------
 // Description: Gets a random position somewhere within %distance of the given position.
+// Param %position: The position to generate a new position around.
+// Param %distance: The maximum distance the new position may be 
 //------------------------------------------------------------------------------------------
 function getRandomPosition(%position, %distance, %raycast)
 {

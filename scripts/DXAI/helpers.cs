@@ -1,6 +1,12 @@
+//------------------------------------------------------------------------------------------
 // helpers.cs
-// Helper functions for the AI System
+// Helper functions used in the experimental DXAI system.
+// https://github.com/Ragora/T2-DXAI.git
+//
 // Copyright (c) 2014 Robert MacGregor
+// This software is licensed under the MIT license. 
+// Refer to LICENSE.txt for more information.
+//------------------------------------------------------------------------------------------
 
 function sameSide(%p1, %p2, %a, %b)
 {
@@ -27,25 +33,6 @@ function pointInTriangle(%point, %a, %b, %c)
         return true;
     
     return false;
-}
-
-function AIConnection::reset(%this)
-{
-    AIUnassignClient(%this);
-    
-    %this.stop();
-    %this.clearTasks();
-    %this.clearStep();
-    %this.lastDamageClient = -1;
-    %this.lastDamageTurret = -1;
-    %this.shouldEngage = -1;
-    %this.setEngageTarget(-1);
-    %this.setTargetObject(-1);
-    %this.pilotVehicle = false;
-    %this.defaultTasksAdded = false;
-    
-    if (isObject(%this.controlByHuman))
-        aiReleaseHumanControl(%this.controlByHuman, %this);
 }
 
 // TODO: Return in a faster-to-read format: Could try as static GVar names
@@ -254,6 +241,4 @@ $TypeMasks::BaseAssetObjectType = $TypeMasks::ForceFieldObjectType | $TypeMasks:
 $TypeMasks::GameSupportObjectType = $TypeMasks::TriggerObjectType | $TypeMasks::MarkerObjectType | $TypeMasks::CameraObjectType | $TypeMasks::VehicleBlockerObjectType | $TypeMasks::PhysicalZoneObjectType;
 $TypeMasks::GameContentObjectType = $TypeMasks::ExplosionObjectType | $TypeMasks::CorpseObjectType | $TypeMasks::DebrisObjectType;
 $TypeMasks::DefaultLOSObjectType = $TypeMasks::TerrainObjectType | $TypeMasks::InteriorObjectType | $TypeMasks::StaticObjectType;
-
-// We declare the AllObjectType like this instead of -1 because it seems -1 can sometimes not work?
-$TypeMasks::AllObjectType = $TypeMasks::InteractiveObjectType | $TypeMasks::DefaultLOSObjectType | $TypeMasks::GameContentObjectType | $TypeMasks::GameSupportObjectType | $TypeMasks::BaseAssetObjectType | $TypeMasks::UnInteractiveObjectType; 
+$TypeMasks::AllObjectType = -1;

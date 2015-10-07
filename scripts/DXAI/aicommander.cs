@@ -34,6 +34,7 @@ function AICommander::setup(%this)
     for (%iteration = 0; %iteration < ClientGroup.getCount(); %iteration++)
     {
         %currentClient = ClientGroup.getObject(%iteration);
+        %currentClient.updateVisualAcuity();
         
         if (%currentClient.isAIControlled() && %currentClient.team == %this.team)
         {
@@ -138,10 +139,14 @@ function AICommander::assignTasks(%this)
       %bot = %this.botList.getObject(%iteration);
       %bot.addTask(AIEnhancedEngageTarget);
       %bot.addTask(AIEnhancedRearmTask);
+      %bot.addTask(AIEnhancedPathCorrectionTask);
       
       // We only need this task if we're actually playing CTF.
       if ($CurrentMissionType $= "CTF")
+      {
         %bot.addTask(AIEnhancedReturnFlagTask);
+        %bot.addTask(AIEnhancedFlagCaptureTask);
+      }
       
       %bot.targetLoadout = 0;
       %bot.shouldRearm = true;

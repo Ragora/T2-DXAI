@@ -7,6 +7,21 @@
 // This software is licensed under the MIT license. Refer to LICENSE.txt for more information.
 //------------------------------------------------------------------------------------------
 
+// Weights
+// AIEnhancedFlagCaptureTask - $DXAI::Task::MediumPriority
+// AIEnhancedEscort - $DXAI::Task::MediumPriority
+// AIEnhancedDefendLocation - $DXAI::Task::MediumPriority
+// AIEnhancedScoutLocation - $DXAI::Task::MediumPriority
+// AIEnhancedEngageTarget - $DXAI::Task::VeryHighPriority
+// AIEnhancedReturnFlagTask - $DXAI::Task::HighPriority
+// AIEnhancedRearmTask - $DXAI::Task::HighPriority
+
+$DXAI::Task::NoPriority = 0;
+$DXAI::Task::LowPriority = 100;
+$DXAI::Task::MediumPriority = 200;
+$DXAI::Task::HighPriority = 500;
+$DXAI::Task::VeryHighPriority = 1000; 
+
 //------------------------------------------------------------------------------------------
 //      +Param %bot.escortTarget: The ID of the object to escort. This can be literally
 // any object that exists in the game world.
@@ -20,7 +35,7 @@
 function AIEnhancedEscort::initFromObjective(%task, %objective, %client) { }
 function AIEnhancedEscort::assume(%task, %client) { %task.setMonitorFreq(1); }
 function AIEnhancedEscort::retire(%task, %client) { %client.isMoving = false; %client.manualAim = false; }
-function AIEnhancedEscort::weight(%task, %client) { %task.setWeight(500); }
+function AIEnhancedEscort::weight(%task, %client) { %task.setWeight($DXAI::Task::MediumPriority); }
 
 function AIEnhancedEscort::monitor(%task, %client)
 {   
@@ -37,7 +52,7 @@ function AIEnhancedEscort::monitor(%task, %client)
     %client.manualAim = true;
     %client.aimLocation = %escortLocation;
     
-    %client.moveLocation = getRandomPositionOnTerrain(%escortLocation, 40);
+    %client.setMoveTarget(getRandomPositionOnTerrain(%escortLocation, 40));
 }
 
 //------------------------------------------------------------------------------------------
@@ -53,22 +68,22 @@ function AIEnhancedEscort::monitor(%task, %client)
 function AIEnhancedDefendLocation::initFromObjective(%task, %objective, %client) { }
 function AIEnhancedDefendLocation::assume(%task, %client) { %task.setMonitorFreq(1); }
 function AIEnhancedDefendLocation::retire(%task, %client) { %client.isMoving = false; }
-function AIEnhancedDefendLocation::weight(%task, %client) { %task.setWeight(500); }
+function AIEnhancedDefendLocation::weight(%task, %client) { %task.setWeight($DXAI::Task::MediumPriority); }
 
 function AIEnhancedDefendLocation::monitor(%task, %client)
 {   
-    if (%client.getPathDistance(%client.defendLocation) <= 40)
+    if (%client.getPathDistance(%client.defendTargetLocation) <= 40)
     {
         // Pick a random time to move to a nearby location
         if (%client.defendTime == -1)
         {
             %client.nextDefendRotation = getRandom(5000, 10000);
-            %client.isMoving = false;
+            %client.setMoveTarget(-1);
         }
         
         // If we're near our random point, just don't move
         if (%client.getPathDistance(%client.moveLocation) <= 10)
-            %client.isMoving = false;
+            %client.setMoveTarget(-1);
             
         %client.defendTime += 32;
         if (%client.defendTime >= %client.nextDefendRotation)
@@ -77,15 +92,13 @@ function AIEnhancedDefendLocation::monitor(%task, %client)
             %client.nextDefendRotation = getRandom(5000, 10000);
             
             // TODO: Replace with something that detects interiors as well              
-            %client.moveLocation = getRandomPositionOnTerrain(%client.defendLocation, 40);
-            %client.isMoving = true;
+            %client.setMoveTarget(getRandomPositionOnTerrain(%client.defendTargetLocation, 40));
         }
     }
     else
     {
         %client.defendTime = -1;
-        %client.moveLocation = %client.defendLocation;
-        %client.isMoving = true;
+        %client.setMoveTarget(%client.defendTargetLocation);
     }
 }
 
@@ -103,7 +116,7 @@ function AIEnhancedDefendLocation::monitor(%task, %client)
 function AIEnhancedScoutLocation::initFromObjective(%task, %objective, %client) { }
 function AIEnhancedScoutLocation::assume(%task, %client) { %task.setMonitorFreq(1); %client.currentNode = -1; }
 function AIEnhancedScoutLocation::retire(%task, %client) { }
-function AIEnhancedScoutLocation::weight(%task, %client) { %task.setWeight(500); }
+function AIEnhancedScoutLocation::weight(%task, %client) { %task.setWeight($DXAI::Task::MediumPriority); }
 
 function AIEnhancedScoutLocation::monitor(%task, %client)
 {   
@@ -117,25 +130,23 @@ function AIEnhancedScoutLocation::monitor(%task, %client)
         %client.currentNode = NavGraph.randNode(%client.scoutLocation, %client.scoutDistance, true, true);
         
         if (%client.currentNode != -1)
-        {
-            %client.moveLocation = NavGraph.nodeLoc(%client.currentNode);
-            %client.isMoving = true;
-        }
+            %client.setMoveTarget(NavGraph.nodeLoc(%client.currentNode));
     }
     // We're moving, or are near enough to our target
     else
     {
-        %pathDistance = %client.getPathDistance(%client.moveLocation);
+        %pathDistance = %client.getPathDistance(%client.moveTarget);
+        
         // Don't move if we're close enough to our next node
         if (%pathDistance <= 40 && %client.isMoving)
         {
-            %client.isMoving = false;
+            %client.setMoveTarget(-1);
             %client.nextScoutRotation = getRandom(5000, 10000);
             %client.scoutTime += 32;
         }
-        else if(%client.getPathDistance(%client.moveLocation) > 40)
+        else if(%client.getPathDistance(%client.moveTarget) > 40)
         {
-            %client.isMoving = true;
+          //  %client.setMoveTarget(%client.moveTarget);
             %client.scoutTime = 0;
         }
         else
@@ -152,10 +163,7 @@ function AIEnhancedScoutLocation::monitor(%task, %client)
             
             // Ensure that we found a node.
             if (%client.currentNode != -1)
-            {
-                %client.moveLocation = NavGraph.nodeLoc(%client.currentNode);
-                %client.isMoving = true;
-            }
+               %client.setMoveTarget(NavGraph.nodeLoc(%client.currentNode));
         }
     }   
 }
@@ -174,90 +182,88 @@ function AIEnhancedEngageTarget::retire(%task, %client) { }
 
 function AIEnhancedEngageTarget::weight(%task, %client) 
 {
-  if (!isObject(%client.engageTarget))
-  {
-    %visibleObjects = %client.getObjectsInViewcone($TypeMasks::PlayerObjectType, %client.viewDistance, true);
-    
-    // Choose the closest target
-    // TODO: Choose on more advanced metrics like HP
-    %chosenTarget = -1;
-    %chosenTargetDistance = 9999;
-    for (%iteration = 0; %iteration < %visibleObjects.getCount(); %iteration++)
+    if (!isObject(%client.engageTarget))
     {
-      %potentialTarget = %visibleObjects.getObject(%iteration);
-      
-      %potentialTargetDistance = vectorDist(%potentialTarget.getPosition(), %client.player.getPosition());
-      if (%potentialTarget.client.team != %client.team && %potentialTargetDistance < %chosenTargetDistance)
-      {
-        %chosenTargetDistance = %potentialTargetDistance;
-        %chosenTarget = %potentialTarget;       
-      }
+        %visibleObjects = %client.getObjectsInViewcone($TypeMasks::PlayerObjectType, %client.viewDistance, true);
+        
+        // Choose the closest target
+        // TODO: Choose on more advanced metrics like HP
+        %chosenTarget = -1;
+        %chosenTargetDistance = 9999;
+        for (%iteration = 0; %iteration < %visibleObjects.getCount(); %iteration++)
+        {
+            %potentialTarget = %visibleObjects.getObject(%iteration);
+            
+            %potentialTargetDistance = vectorDist(%potentialTarget.getPosition(), %client.player.getPosition());
+            if (%potentialTarget.client.team != %client.team && %potentialTargetDistance < %chosenTargetDistance)
+            {
+                %chosenTargetDistance = %potentialTargetDistance;
+                %chosenTarget = %potentialTarget;       
+            }
+        }
+        
+        %visibleObjects.delete();
+        %client.engageTarget = %chosenTarget;
     }
-    
-    %visibleObjects.delete();
-    %client.engageTarget = %chosenTarget;
-  }
-  else
-  {
-    // Can we still see them?
-    %rayCast = containerRayCast(%client.player.getWorldBoxCenter(), %client.engageTarget.getWorldBoxCenter(), -1, %client.player);           
-    %hitObject = getWord(%raycast, 0);
+    else
+    {
+        // Can we still see them?
+        %rayCast = containerRayCast(%client.player.getWorldBoxCenter(), %client.engageTarget.getWorldBoxCenter(), -1, %client.player);           
+        %hitObject = getWord(%raycast, 0);
 
-    // TODO: Go to the last known position.
-    if (%hitObject != %client.engageTarget)
-      %client.engageTarget = -1;
-  }
+        // TODO: Go to the last known position.
+        if (%hitObject != %client.engageTarget)
+            %client.engageTarget = -1;
+    }
 
-  if (!isObject(%client.engageTarget) && %client.engageTargetLastPosition $= "")
-    %task.setWeight(0);
-  else
-    %task.setWeight(1000);
+    if (!isObject(%client.engageTarget) && %client.engageTargetLastPosition $= "")
+        %task.setWeight($DXAI::Task::NoPriority);
+    else
+        %task.setWeight($DXAI::Task::VeryHighPriority);
 }
 
 function AIEnhancedEngageTarget::monitor(%task, %client)
 {       
-  if (isObject(%client.engageTarget))
-  {    
-    %player = %client.player;
-    %targetDistance = vectorDist(%player.getPosition(), %client.engageTarget.getPosition());
-    
-    // Firstly, just aim at them for now
-    %client.aimAt(%client.engageTarget.getWorldBoxCenter());
-    
-    // What is our current best weapon? Right now we just check target distance and weapon spread.
-    %bestWeapon = 0;
-    
-    for (%iteration = 0; %iteration < %player.weaponSlotCount; %iteration++)
-    {
-      // Weapons with a decent bit of spread should be used <= 20m
+    if (isObject(%client.engageTarget))
+    {    
+        %player = %client.player;
+        %targetDistance = vectorDist(%player.getPosition(), %client.engageTarget.getPosition());
+        
+        // Firstly, just aim at them for now
+        %client.aimAt(%client.engageTarget.getWorldBoxCenter());
+        
+        // What is our current best weapon? Right now we just check target distance and weapon spread.
+        %bestWeapon = 0;
+        
+        for (%iteration = 0; %iteration < %player.weaponSlotCount; %iteration++)
+        {
+        // Weapons with a decent bit of spread should be used <= 20m
+        }
+        
+        %player.selectWeaponSlot(%bestWeapon);
+        %client.engageTargetLastPosition = %client.engageTarget.getWorldBoxCenter();
+        
+       %client.setMoveTarget(getRandomPositionOnTerrain(%client.engageTargetLastPosition, 40));
+        
+        %client.pressFire();
     }
-    
-    %player.selectWeaponSlot(%bestWeapon);
-    %client.engageTargetLastPosition = %client.engageTarget.getWorldBoxCenter();
-    
-    %client.isMoving = true;
-    %client.moveLocation = getRandomPositionOnTerrain(%client.engageTargetLastPosition, 40);
-    
-    %client.pressFire();
-  }
-  else if (%client.engageTargetLastPosition !$= "")
-  {
-    %client.isMoving = true;
-    %client.moveLocation = %client.engageTargetLastPosition;
+    else if (%client.engageTargetLastPosition !$= "")
+    {
+        %client.setMoveTarget(%client.engageTargetLastPosition);
 
-    if (vectorDist(%client.player.getPosition(), %client.engageTargetLastPosition) <= 10)
-    {
-      %client.engageTargetLastPosition = "";
-      %client.isMoving = false; 
+        if (vectorDist(%client.player.getPosition(), %client.engageTargetLastPosition) <= 10)
+        {
+            %client.engageTargetLastPosition = "";
+            %client.setMoveTarget(-1);
+        }
     }
-  }
 }
 //------------------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------------------
 //      +Param %bot.shouldRearm: A boolean representing whether or not this bot should go
 // and rearm.
-//      +Param %bot.targetInventory: The ID of the inventory station to rearm at.
+//      +Param %bot.rearmTarget: The ID of the inventory station to rearm at.
 //------------------------------------------------------------------------------------------`
 function AIEnhancedRearmTask::initFromObjective(%task, %objective, %client) { }
 function AIEnhancedRearmTask::assume(%task, %client) { %task.setMonitorFreq(1); }
@@ -265,30 +271,27 @@ function AIEnhancedRearmTask::retire(%task, %client) { }
 
 function AIEnhancedRearmTask::weight(%task, %client) 
 {
-  if (%client.shouldRearm)
-    %task.setWeight(600);
-  else
-    %task.setWeight(0);
+    if (%client.shouldRearm)
+        %task.setWeight($DXAI::Task::HighPriority);
+    else
+        %task.setWeight($DXAI::Task::NoPriority);
 }
 
 function AIEnhancedRearmTask::monitor(%task, %client)
 {       
-  if (!isObject(%client.targetInventory))
-    %client.targetInventory = %client.getClosestInventory();
-  
-  if (isObject(%client.targetInventory))
-  {
-    // Politely wait if someone is already on it.
-    if (vectorDist(%client.targetInventory.getPosition(), %client.player.getPosition()) <= 7 && isObject(%client.targetInventory.triggeredBy))
-      %client.isMoving = false;
-    else
+    if (!isObject(%client.rearmTarget))
+        %client.rearmTarget = %client.getClosestInventory();
+    
+    if (isObject(%client.rearmTarget))
     {
-      %client.isMoving = true;
-      %client.moveLocation = %client.targetInventory.getPosition();
+        // Politely wait if someone is already on it.
+        if (vectorDist(%client.rearmTarget.getPosition(), %client.player.getPosition()) <= 7 && isObject(%client.rearmTarget.triggeredBy))
+            %client.setMoveTarget(-1);
+        else
+            %client.setMoveTarget(%client.rearmTarget.getPosition());
     }
-  }
-  else
-    %client.shouldRearm = false; // No inventories?
+    else
+        %client.shouldRearm = false; // No inventories?
 }
 //------------------------------------------------------------------------------------------
 
@@ -296,54 +299,108 @@ function AIEnhancedRearmTask::monitor(%task, %client)
 // Description: A task that actually makes the bots return a flag that's nearby.
 //------------------------------------------------------------------------------------------`
 function AIEnhancedReturnFlagTask::initFromObjective(%task, %objective, %client) { }
-function AIEnhancedReturnFlagTask::assume(%task, %client) { %task.setMonitorFreq(1); }
+function AIEnhancedReturnFlagTask::assume(%task, %client) { %task.setMonitorFreq(32); }
 function AIEnhancedReturnFlagTask::retire(%task, %client) { }
 
 function AIEnhancedReturnFlagTask::weight(%task, %client) 
 {
-  %flag = nameToID("Team" @ %client.team @ "Flag1");
-  if (!isObject(%flag) || %flag.isHome)
-  {
-    %task.setWeight(0);
-    %client.targetFlag = -1;
-    %client.isMoving = false;
-  }
-  else
-  {
-    // TODO: For now, all the bots go after it! Make this check if the bot is range.
-    %task.setWeight(700);
-    
-    %client.targetFlag = %flag;
-  }
+    %flag = nameToID("Team" @ %client.team @ "Flag1");
+    if (!isObject(%flag) || %flag.isHome)
+    {
+      //  %client.setMoveTarget(-1);
+        %task.setWeight($DXAI::Task::NoPriority);
+    }
+    else
+    {
+        // TODO: For now, all the bots go after it! Make this check if the bot is range.
+        %task.setWeight($DXAI::Task::HighPriority);    
+        %client.returnFlagTarget = %flag;     
+    }
 }
 
 function AIEnhancedReturnFlagTask::monitor(%task, %client)
 {       
-  if (!isObject(%client.targetFlag))
-    return;
-  
-  // TODO: Make the bot engage the flag runner if its currently held.
-  %client.isMoving = true;
-  %client.moveLocation = %client.targetFlag.getPosition();
+    if (!isObject(%client.returnFlagTarget))
+        return;
+    
+   // %client.setFollowTarget(%client.returnFlagTarget, 0, 0, false);
+}
+//------------------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------------------
+// Description: A task that performs path correction.
+//------------------------------------------------------------------------------------------`
+function AIEnhancedPathCorrectionTask::initFromObjective(%task, %objective, %client) { }
+function AIEnhancedPathCorrectionTask::assume(%task, %client) { %task.setMonitorFreq(1); }
+function AIEnhancedPathCorrectionTask::retire(%task, %client) { }
+
+function AIEnhancedPathCorrectionTask::weight(%task, %client) 
+{
+    %task.setWeight(0);
+}
+
+function AIEnhancedPathCorrectionTask::monitor(%task, %client)
+{       
+
+}
+//------------------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------------------
+// Description: A task that triggers bots to grab & run the enemy flag.
+//------------------------------------------------------------------------------------------
+function AIEnhancedFlagCaptureTask::initFromObjective(%task, %objective, %client) { }
+function AIEnhancedFlagCaptureTask::assume(%task, %client) { %task.setMonitorFreq(1); }
+function AIEnhancedFlagCaptureTask::retire(%task, %client) { }
+
+function AIEnhancedFlagCaptureTask::weight(%task, %client) 
+{
+    if (%client.shouldRunFlag)
+    {
+        // First, is the enemy flag home?
+        %enemyTeam = %client.team == 1 ? 2 : 1;
+        %enemyFlag = nameToID("Team" @ %enemyTeam @ "Flag1");
+      
+        if (isObject(%enemyFlag) && %enemyFlag.isHome)
+        {
+            %client.targetCaptureFlag = %enemyFlag;
+            %task.setWeight($DXAI::Task::MediumPriority);
+        }
+    }
+    else
+        %task.setWeight($DXAI::Task::NoPriority);
+}
+
+function AIEnhancedFlagCaptureTask::monitor(%task, %client)
+{       
+    if (!isObject(%client.targetCaptureFlag))
+      return;
+    
+    %client.isMovingToTarget = true;
+   // if (%client.targetCaptureFlag.getObjectMount() != %client.player)
+    //    %client.setMoveTarget(%client.targetCaptureFlag.getPosition());
+   //// else
+       %client.setMoveTarget(nameToID("Team" @ %client.team @ "Flag1").getPosition());
 }
 //------------------------------------------------------------------------------------------
 
 function ObjectiveNameToVoice(%objective)
 {
-  %result = "avo.grunt";
-  switch$(%objective)
-  {
-    case "AIEnhancedReturnFlagTask":
-      %result = "slf.def.flag";
-    case "AIEnhancedRearmTask":
-      %result = "avo.grunt";
-    case "AIEnhancedEngageTarget":
-      %result = "slf.att.attack";
-    case "AIEnhancedScoutLocation":
-      %result = "slf.def.defend";
-    case "AIEnhancedEscort":
-      %result = "slf.tsk.cover";
-  }
-  
-  return %result;
+    %result = "avo.grunt";
+    switch$(%objective)
+    {
+      case "AIEnhancedReturnFlagTask":
+        %result = "slf.def.flag";
+      case "AIEnhancedRearmTask":
+        %result = "avo.grunt";
+      case "AIEnhancedEngageTarget":
+        %result = "slf.att.attack";
+      case "AIEnhancedScoutLocation":
+        %result = "slf.def.defend";
+      case "AIEnhancedDefendLocation":
+        %result = "slf.def.defend";
+      case "AIEnhancedEscort":
+        %result = "slf.tsk.cover";
+    }
+    
+    return %result;
 }

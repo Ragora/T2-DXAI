@@ -25,7 +25,7 @@ function AIConnection::update(%this)
     if (isObject(%this.player) && %this.player.getState() $= "Move")
     {
         %this.updateLegs();
-        %this.updateVisualAcuity();
+        %this.updateWeapons();
     }
 }
 
@@ -41,19 +41,74 @@ function AIConnection::isIdle(%this)
         return true;
     
     return %this.commander.idleBotList.isMember(%this);
-} 
+}
+
+function AIConnection::reset(%this)
+{
+  //  AIUnassignClient(%this);
+    
+    %this.stop();
+   // %this.clearTasks();
+    %this.clearStep();
+    %this.lastDamageClient = -1;
+    %this.lastDamageTurret = -1;
+    %this.shouldEngage = -1;
+    %this.setEngageTarget(-1);
+    %this.setTargetObject(-1);
+    %this.pilotVehicle = false;
+    %this.defaultTasksAdded = false;
+    
+    if (isObject(%this.controlByHuman))
+        aiReleaseHumanControl(%this.controlByHuman, %this);
+}
+
+function AIConnection::setMoveTarget(%this, %position)
+{
+    if (%position == -1)
+    {
+        %this.reset();
+        %this.isMovingToTarget = false;
+        %this.isFollowingTarget = false;
+        return;
+    }
+    
+    %this.moveTarget = %position;
+    %this.isMovingToTarget = true;
+    %this.isFollowingTarget = false;
+    %this.setPath(%position);
+    %this.stepMove(%position);
+}
+
+function AIConnection::setFollowTarget(%this, %target, %minDistance, %maxDistance, %hostile)
+{
+    if (!isObject(%target))
+    {
+        %this.reset();
+        %this.isMovingToTarget = false;
+        %this.isFollowingTarget = false;
+        return;
+    }
+        
+    %this.followTarget = %target;
+    %this.isFollowingTarget = true;
+    %this.followMinDistance = %minDistance;
+    %this.followMaxDistance = %maxDistance;
+    %this.followHostile = %hostile;
+    %this.stepEscort(%target);
+}
 
 function AIConnection::updateLegs(%this)
 {
-    if (%this.isMoving && %this.getTaskID() != 0)
+    if (%this.isMovingToTarget)
     {
-        %this.setPath(%this.moveLocation);
-        %this.stepMove(%this.moveLocation);
-        
         if (%this.aimAtLocation)
-            %this.aimAt(%this.moveLocation);
+            %this.aimAt(%this.moveTarget);
         else if(%this.manualAim)
-            %this.aimAt(%this.aimLocation);
+            %this.aimAt(%this.moveTarget);
+    }
+    else if (%this.isFollowingTarget)
+    {
+        
     }
     else
     {
@@ -62,8 +117,22 @@ function AIConnection::updateLegs(%this)
     }
 }
 
+function AIConnection::updateWeapons(%this)
+{
+  
+}
+
 function AIConnection::updateVisualAcuity(%this)
 {
+    if (isEventPending(%this.visualAcuityTick))
+        cancel(%this.visualAcuityTick);
+        
+    if (!isObject(%this.player) || %this.player.getState() !$= "Move")
+    {
+        %this.visualAcuityTick = %this.schedule(getRandom(230, 400), "updateVisualAcuity");
+        return;
+    }
+    
     if (%this.enableVisualDebug)
     {
         if (!isObject(%this.originMarker))
@@ -118,7 +187,7 @@ function AIConnection::updateVisualAcuity(%this)
             
             %className = %current.getClassName();
             
-            // LinearFlareProjectile and LinearProjectile have linear properties, so we can easily determine if a dodge is necessary
+            // LinearFlareProjectile and LinearProjectile have linear trajectories, so we can easily determine if a dodge is necessary
             if (%className $= "LinearFlareProjectile" || %className $= "LinearProjectile")
             {
                 //%this.setDangerLocation(%current.getPosition(), 20);
@@ -175,4 +244,5 @@ function AIConnection::updateVisualAcuity(%this)
     }
     
     %result.delete();
+    %this.visualAcuityTick = %this.schedule(getRandom(230, 400), "updateVisualAcuity");
 }

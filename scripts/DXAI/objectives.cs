@@ -66,7 +66,7 @@ function AIEnhancedEscort::monitor(%task, %client)
 // again.
 //------------------------------------------------------------------------------------------
 function AIEnhancedDefendLocation::initFromObjective(%task, %objective, %client) { }
-function AIEnhancedDefendLocation::assume(%task, %client) { %task.setMonitorFreq(1); }
+function AIEnhancedDefendLocation::assume(%task, %client) { %task.setMonitorFreq(32); }
 function AIEnhancedDefendLocation::retire(%task, %client) { %client.isMoving = false; }
 function AIEnhancedDefendLocation::weight(%task, %client) { %task.setWeight($DXAI::Task::MediumPriority); }
 
@@ -85,7 +85,7 @@ function AIEnhancedDefendLocation::monitor(%task, %client)
         if (%client.getPathDistance(%client.moveLocation) <= 10)
             %client.setMoveTarget(-1);
             
-        %client.defendTime += 32;
+        %client.defendTime += 1024;
         if (%client.defendTime >= %client.nextDefendRotation)
         {
             %client.defendTime = 0;
@@ -114,7 +114,7 @@ function AIEnhancedDefendLocation::monitor(%task, %client)
 // including into and through interiors & other noded obstructions.
 //------------------------------------------------------------------------------------------
 function AIEnhancedScoutLocation::initFromObjective(%task, %objective, %client) { }
-function AIEnhancedScoutLocation::assume(%task, %client) { %task.setMonitorFreq(1); %client.currentNode = -1; }
+function AIEnhancedScoutLocation::assume(%task, %client) { %task.setMonitorFreq(32); %client.currentNode = -1; }
 function AIEnhancedScoutLocation::retire(%task, %client) { }
 function AIEnhancedScoutLocation::weight(%task, %client) { %task.setWeight($DXAI::Task::MediumPriority); }
 
@@ -142,7 +142,7 @@ function AIEnhancedScoutLocation::monitor(%task, %client)
         {
             %client.setMoveTarget(-1);
             %client.nextScoutRotation = getRandom(5000, 10000);
-            %client.scoutTime += 32;
+            %client.scoutTime += 1024;
         }
         else if(%client.getPathDistance(%client.moveTarget) > 40)
         {
@@ -150,7 +150,7 @@ function AIEnhancedScoutLocation::monitor(%task, %client)
             %client.scoutTime = 0;
         }
         else
-            %client.scoutTime += 32;
+            %client.scoutTime += 1024;
         
         // Wait a little bit at each node
         if (%client.scoutTime >= %client.nextScoutRotation)
@@ -243,7 +243,7 @@ function AIEnhancedEngageTarget::monitor(%task, %client)
         %player.selectWeaponSlot(%bestWeapon);
         %client.engageTargetLastPosition = %client.engageTarget.getWorldBoxCenter();
         
-       %client.setMoveTarget(getRandomPositionOnTerrain(%client.engageTargetLastPosition, 40));
+        %client.setMoveTarget(getRandomPositionOnTerrain(%client.engageTargetLastPosition, 40));
         
         %client.pressFire();
     }
@@ -266,7 +266,7 @@ function AIEnhancedEngageTarget::monitor(%task, %client)
 //      +Param %bot.rearmTarget: The ID of the inventory station to rearm at.
 //------------------------------------------------------------------------------------------`
 function AIEnhancedRearmTask::initFromObjective(%task, %objective, %client) { }
-function AIEnhancedRearmTask::assume(%task, %client) { %task.setMonitorFreq(1); }
+function AIEnhancedRearmTask::assume(%task, %client) { %task.setMonitorFreq(32); }
 function AIEnhancedRearmTask::retire(%task, %client) { }
 
 function AIEnhancedRearmTask::weight(%task, %client) 
@@ -331,7 +331,7 @@ function AIEnhancedReturnFlagTask::monitor(%task, %client)
 // Description: A task that performs path correction.
 //------------------------------------------------------------------------------------------`
 function AIEnhancedPathCorrectionTask::initFromObjective(%task, %objective, %client) { }
-function AIEnhancedPathCorrectionTask::assume(%task, %client) { %task.setMonitorFreq(1); }
+function AIEnhancedPathCorrectionTask::assume(%task, %client) { %task.setMonitorFreq(32); }
 function AIEnhancedPathCorrectionTask::retire(%task, %client) { }
 
 function AIEnhancedPathCorrectionTask::weight(%task, %client) 

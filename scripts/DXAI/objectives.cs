@@ -323,7 +323,7 @@ function AIEnhancedReturnFlagTask::monitor(%task, %client)
     if (!isObject(%client.returnFlagTarget))
         return;
     
-   // %client.setFollowTarget(%client.returnFlagTarget, 0, 0, false);
+    %client.setMoveTarget(%client.returnFlagTarget.getPosition());
 }
 //------------------------------------------------------------------------------------------
 

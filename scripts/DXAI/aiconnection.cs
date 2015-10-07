@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------------------
 // aiconnection.cs
 // Source file declaring the custom AIConnection methods used by the DXAI experimental
-// AI enhancement project.
+// AI enhancement project. 
 // https://github.com/Ragora/T2-DXAI.git
 //
 // Copyright (c) 2014 Robert MacGregor
@@ -9,12 +9,21 @@
 // Refer to LICENSE.txt for more information.
 //------------------------------------------------------------------------------------------
 
+//------------------------------------------------------------------------------------------
+// Description: This initializes some basic values on the given AIConnection object such
+// as the fieldOfView and the viewDistance. It isn't supposed to do anything else.
+//------------------------------------------------------------------------------------------
 function AIConnection::initialize(%this)
 {
-    %this.fieldOfView = 3.14 / 2; // 90* View cone
-    %this.viewDistance = 300;
+    %this.fieldOfView = $DXAI::Bot::DefaultFieldOfView;
+    %this.viewDistance = $DXAI::Bot::DefaultViewDistance;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: An update function that is called by the commander code itself once every
+// 32 milliseconds. It is what controls the bot's legs (movement) as well as the aiming
+// and firing logic.
+//------------------------------------------------------------------------------------------
 function AIConnection::update(%this)
 {
     if (isObject(%this.player) && %this.player.getState() $= "Move")
@@ -24,12 +33,25 @@ function AIConnection::update(%this)
     }
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Called by the main system when a hostile projectile impacts near the bot.
+// This ideally is supposed to trigger some search logic instead of instantly knowing 
+// where the shooter is like the original AI did.
+// NOTE: This is automatically called by the main system and therefore should not be called
+// directly.
+//------------------------------------------------------------------------------------------
 function AIConnection::notifyProjectileImpact(%this, %data, %proj, %position)
 {
     if (!isObject(%proj.sourceObject) || %proj.sourceObject.client.team == %this.team)
         return;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Returns whether or not the given AIConnection is considered by be 'idle'.
+// This is determined by checking whether or not the AIConnection is in their associated
+// commander's idle bot list. If the AIConnection has no commander, then true is always
+// returned.
+//------------------------------------------------------------------------------------------
 function AIConnection::isIdle(%this)
 {
     if (!isObject(%this.commander))
@@ -38,6 +60,10 @@ function AIConnection::isIdle(%this)
     return %this.commander.idleBotList.isMember(%this);
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Basically resets the entire state of the given AIConnection. It does not
+// unassign tasks, but it does reset the bot's current movement state.
+//------------------------------------------------------------------------------------------
 function AIConnection::reset(%this)
 {
   //  AIUnassignClient(%this);
@@ -57,6 +83,15 @@ function AIConnection::reset(%this)
         aiReleaseHumanControl(%this.controlByHuman, %this);
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Tells the AIConnection to move to a given position. They will automatically
+// plot a path and attempt to navigate there. 
+// Param %position: The target location to move to. If this is simply -1, then all current
+// moves will be cancelled.
+// NOTE: This should only be called by the bot's current active task. If this is called
+// outside of the AI task system, then the move order is very liable to be overwritten by
+// the current running task in it's next monitor call.
+//------------------------------------------------------------------------------------------
 function AIConnection::setMoveTarget(%this, %position)
 {
     if (%position == -1)
@@ -77,24 +112,50 @@ function AIConnection::setMoveTarget(%this, %position)
     %this.maximumPathDistance = -9999;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Tells the AIConnection to follow a given target object.
+// Param %target: The ID of the target object to be following. If the target does not exist,
+// nothing happens. If the target is -1, then all current moves will be cancelled.
+// Param %minDistance: The minimum following distance that the bot should enforce.
+// Param %maxDistance: The maximum following dinstance that the bot should enforce.
+// Param %hostile: A boolean representing whether or not the bot should perform evasion
+// while maintaining a follow distance between %minDistance and %maxDistance.
+// NOTE: This should only be called by the bot's current active task. If this is called
+// outside of the AI task system, then the move order is very liable to be overwritten by
+// the current running task in it's next monitor call.
+//------------------------------------------------------------------------------------------
 function AIConnection::setFollowTarget(%this, %target, %minDistance, %maxDistance, %hostile)
 {
-    if (!isObject(%target))
+    if (%target == -1)
     {
         %this.reset();
         %this.isMovingToTarget = false;
         %this.isFollowingTarget = false;
-        return;
     }
+    
+    if (!isObject(%target))
+        return;
         
     %this.followTarget = %target;
     %this.isFollowingTarget = true;
     %this.followMinDistance = %minDistance;
     %this.followMaxDistance = %maxDistance;
     %this.followHostile = %hostile;
+    
+    // TODO: Implement custom follow logic to respect %minDistance, %maxDistance and %hostile.
+    // Perhaps a specific combination of these values will trigger the default escort logic:
+    // A min distance of 10 or less, a max distance of 20 or less and not hostile?
     %this.stepEscort(%target);
 }
 
+//------------------------------------------------------------------------------------------
+// Description: A function that is used to determine whether or not the given AIConnection
+// appears to be stuck somewhere. Currently, it works by tracking how far along the current
+// path a given bot is once every 5 seconds. If there appears to have been no good progress
+// between calls, then the bot is marked as stuck.
+// NOTE: This is called automatically on its own scheduled tick and shouldn't be called
+// directly.
+//------------------------------------------------------------------------------------------
 function AIConnection::stuckCheck(%this)
 {
     if (isEventPending(%this.stuckCheckTick))
@@ -118,6 +179,13 @@ function AIConnection::stuckCheck(%this)
     %this.stuckCheckTick = %this.schedule(5000, "stuckCheck");
 }
 
+//------------------------------------------------------------------------------------------
+// Description: A function called by the ::update function of the AIConnection that is
+// called once every 32ms by the commander AI logic to update the bot's current move
+// logic.
+// NOTE: This is automatically called by the commander AI and therefore should not be
+// called directly.
+//------------------------------------------------------------------------------------------
 function AIConnection::updateLegs(%this)
 {
     %now = getSimTime();
@@ -130,37 +198,6 @@ function AIConnection::updateLegs(%this)
             %this.aimAt(%this.moveTarget);
         else if(%this.manualAim)
             %this.aimAt(%this.moveTarget);
-            
-        %targetDistance = %this.pathDistRemaining(9000);
-        
-        if (%targetDistance > %this.maximumPathDistance)
-            %this.maximumPathDistance = %targetDistance;
-         if (%targetDistance < %this.minimumPathDistance)
-            %this.minimumPathDistance = %targetDistance;
-    
-        // Bots follow a set of lines drawn between nodes to slowly decrement the path distance,
-        // so bots that are stuck usually get their remaining distance stuck in some range of
-        // arbitrary values, so we monitor the minimum and maximum values over a period of 5 seconds
-            
-        // Test...
-        %pathDistance = %this.getPathDistance(%this.moveTarget);
-        if(%pathDistance > 10 && %this.moveTravelTime < 10000)
-            %this.moveTravelTime += %delta;
-        else if (%pathDistance < 10)
-            %this.moveTravelTime = 0;
-        else if (%this.moveTravelTime >= 10000)
-        {
-            // We appear to be stuck, so pick a random nearby node and try to run to it
-            %this.moveTravelTime = 0;
-            %this.isPathCorrecting = true;
-            
-            if (isObject(NavGraph))
-            {
-                %randomNode = NavGraph.randNode(%this.player.getPosition(), 200, true, true);
-                if (%randomNode != -1)
-                    %this.setMoveTarget(NavGraph.nodeLoc(%randomNode));
-            }
-        }
     }
     else if (%this.isFollowingTarget)
     {
@@ -173,6 +210,13 @@ function AIConnection::updateLegs(%this)
     }
 }
 
+//------------------------------------------------------------------------------------------
+// Description: A function called by the ::update function of the AIConnection that is
+// called once every 32ms by the commander AI logic to update the bot's current aiming &
+// engagement logic.
+// NOTE: This is automatically called by the commander AI and therefore should not be
+// called directly.
+//------------------------------------------------------------------------------------------
 function AIConnection::updateWeapons(%this)
 {
     if (isObject(%this.engageTarget))
@@ -195,17 +239,31 @@ function AIConnection::updateWeapons(%this)
     }
 }
 
+//------------------------------------------------------------------------------------------
+// Description: A function called randomly on time periods between 
+// $DXAI::Bot::MinimumVisualAcuityTime and $DXAI::Bot::MaximumVisualAcuityTime which
+// attempts to simulate Human eyesight using a complex view cone algorithm implemented
+// entirely in Torque Script.
+// Param %bot.enableVisualDebug: A boolean assigned to an individual bot that is used to
+// enable or disable the visual debug feature. This feature, when enabled, will draw the
+// bot's view cone using waypoints placed at the individual points of the view cone and is
+// updated once per tick of this function.
+// NOTE: This is called automatically using its own scheduled ticks and therefore should
+// not be called directly.
+//------------------------------------------------------------------------------------------
 function AIConnection::updateVisualAcuity(%this)
 {
     if (isEventPending(%this.visualAcuityTick))
         cancel(%this.visualAcuityTick);
-        
+    
+    // If we can't even see or if we're downright dead, don't do anything.
     if (%this.visibleDistance = 0 || !isObject(%this.player) || %this.player.getState() !$= "Move")
     {
-        %this.visualAcuityTick = %this.schedule(getRandom(230, 400), "updateVisualAcuity");
+        %this.visualAcuityTick = %this.schedule(getRandom($DXAI::Bot::MinimumVisualAcuityTime, $DXAI::Bot::MaximumVisualAcuityTime,), "updateVisualAcuity");
         return;
     }
     
+    // The visual debug feature is a system in which we can use waypoints to view the bot's calculated viewcone per tick.
     if (%this.enableVisualDebug)
     {
         if (!isObject(%this.originMarker))

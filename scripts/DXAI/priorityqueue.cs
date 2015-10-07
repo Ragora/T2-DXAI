@@ -3,10 +3,21 @@
 // Source file for the priority queue implementation.
 // https://github.com/Ragora/T2-DXAI.git
 //
+// FIXME: Make the keys regular priorities so more than one value can occupy the same
+// priority value.
+//
 // Copyright (c) 2014 Robert MacGregor
 // This software is licensed under the MIT license. Refer to LICENSE.txt for more information.
 //------------------------------------------------------------------------------------------
 
+//------------------------------------------------------------------------------------------
+// Description: Adds a new value to the priority queue.
+// Param %key: The key (or priority) to map to %value. This must be a numeric value that
+// can be compared using the relational operators.
+// Param %value: The value to map. This can be arbitrary data or object ID's as Torque
+// script treats object ID's and regular numerics as the same thing until you try to
+// actually use them as an object.
+//------------------------------------------------------------------------------------------
 function PriorityQueue::add(%this, %key, %value)
 {
     // If we already have a key, update it
@@ -39,16 +50,29 @@ function PriorityQueue::add(%this, %key, %value)
     %this.count++;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Removes a value from the priority queue with the given key (priority).
+// Param %key: The key (priority) to remove from the priority queue.
+// Return: A boolean representing whether or not anything was actually removed.
+//------------------------------------------------------------------------------------------
 function PriorityQueue::remove(%this, %key)
 {
     if (!%this.hasKey[%key])
-        return;
+        return false;
     
     %this.hasKey[%key] = false;
     %this._shift(%this.keyIndex[%key], true);
     %this.count--;
+    return true;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: An internal function used by the priority queue to shift values around.
+// Param %index: The index to start at.
+// Param %isRemoval: A boolean representing whether or not this shift is supposed to be
+// a removal.
+// NOTE: This is an internal function and therefore should not be invoked directly.
+//------------------------------------------------------------------------------------------
 function PriorityQueue::_shift(%this, %index, %isRemoval)
 {
     if (%isRemoval)
@@ -73,13 +97,32 @@ function PriorityQueue::_shift(%this, %index, %isRemoval)
     }
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Returns the value in this priority queue with the current highest known
+// priority.
+// Return: The current value with the highest known priority. This returns -1 in the event
+// that the priority queue is empty. However, this may be a valid value in whatever is
+// using the priority queue so the ::isEmpty function should be used.
+//------------------------------------------------------------------------------------------
 function PriorityQueue::topValue(%this)
 {
+    if (%this.count <= 0)
+        return -1;
+        
     return %this.values[%this.count - 1];
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Returns the highest key (priority)
+// Return: The current value with the highest known key *priority. This returns -1 in the event
+// that the priority queue is empty. However, this may be a valid value in whatever is
+// using the priority queue so the ::isEmpty function should be used.
+//------------------------------------------------------------------------------------------
 function PriorityQueue::topKey(%this)
 {
+    if (%this.count <= 0)
+        return -1;
+        
     return %this.keys[%this.count - 1];
 }
 
@@ -113,9 +156,11 @@ function PriorityQueue::dump(%this)
 
 function PriorityQueue::create(%name)
 {
-    return new ScriptObject(%name) 
+    %result = new ScriptObject(%name) 
     { 
         class = "PriorityQueue";
         count = 0;
     };
+    
+    return %result;
 }

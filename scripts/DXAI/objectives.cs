@@ -379,7 +379,6 @@ function AIEnhancedFlagCaptureTask::monitor(%task, %client)
     if (!isObject(%client.targetCaptureFlag))
       return;
     
-    %client.isMovingToTarget = true;
     if (%client.targetCaptureFlag.getObjectMount() != %client.player)
         %client.setMoveTarget(%client.targetCaptureFlag.getPosition());
     else

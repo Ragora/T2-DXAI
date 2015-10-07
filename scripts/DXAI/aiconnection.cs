@@ -37,6 +37,7 @@ function AIConnection::update(%this)
 // Description: Called by the main system when a hostile projectile impacts near the bot.
 // This ideally is supposed to trigger some search logic instead of instantly knowing 
 // where the shooter is like the original AI did.
+//
 // NOTE: This is automatically called by the main system and therefore should not be called
 // directly.
 //------------------------------------------------------------------------------------------
@@ -88,6 +89,7 @@ function AIConnection::reset(%this)
 // plot a path and attempt to navigate there. 
 // Param %position: The target location to move to. If this is simply -1, then all current
 // moves will be cancelled.
+//
 // NOTE: This should only be called by the bot's current active task. If this is called
 // outside of the AI task system, then the move order is very liable to be overwritten by
 // the current running task in it's next monitor call.
@@ -120,9 +122,13 @@ function AIConnection::setMoveTarget(%this, %position)
 // Param %maxDistance: The maximum following dinstance that the bot should enforce.
 // Param %hostile: A boolean representing whether or not the bot should perform evasion
 // while maintaining a follow distance between %minDistance and %maxDistance.
+//
 // NOTE: This should only be called by the bot's current active task. If this is called
 // outside of the AI task system, then the move order is very liable to be overwritten by
 // the current running task in it's next monitor call.
+// TODO: Implement custom follow logic to respect %minDistance, %maxDistance and %hostile.
+// Perhaps a specific combination of these values will trigger the default escort logic:
+// A min distance of 10 or less, a max distance of 20 or less and not hostile?
 //------------------------------------------------------------------------------------------
 function AIConnection::setFollowTarget(%this, %target, %minDistance, %maxDistance, %hostile)
 {
@@ -142,9 +148,6 @@ function AIConnection::setFollowTarget(%this, %target, %minDistance, %maxDistanc
     %this.followMaxDistance = %maxDistance;
     %this.followHostile = %hostile;
     
-    // TODO: Implement custom follow logic to respect %minDistance, %maxDistance and %hostile.
-    // Perhaps a specific combination of these values will trigger the default escort logic:
-    // A min distance of 10 or less, a max distance of 20 or less and not hostile?
     %this.stepEscort(%target);
 }
 
@@ -153,6 +156,7 @@ function AIConnection::setFollowTarget(%this, %target, %minDistance, %maxDistanc
 // appears to be stuck somewhere. Currently, it works by tracking how far along the current
 // path a given bot is once every 5 seconds. If there appears to have been no good progress
 // between calls, then the bot is marked as stuck.
+//
 // NOTE: This is called automatically on its own scheduled tick and shouldn't be called
 // directly.
 //------------------------------------------------------------------------------------------
@@ -183,6 +187,7 @@ function AIConnection::stuckCheck(%this)
 // Description: A function called by the ::update function of the AIConnection that is
 // called once every 32ms by the commander AI logic to update the bot's current move
 // logic.
+//
 // NOTE: This is automatically called by the commander AI and therefore should not be
 // called directly.
 //------------------------------------------------------------------------------------------
@@ -214,6 +219,7 @@ function AIConnection::updateLegs(%this)
 // Description: A function called by the ::update function of the AIConnection that is
 // called once every 32ms by the commander AI logic to update the bot's current aiming &
 // engagement logic.
+//
 // NOTE: This is automatically called by the commander AI and therefore should not be
 // called directly.
 //------------------------------------------------------------------------------------------
@@ -248,6 +254,7 @@ function AIConnection::updateWeapons(%this)
 // enable or disable the visual debug feature. This feature, when enabled, will draw the
 // bot's view cone using waypoints placed at the individual points of the view cone and is
 // updated once per tick of this function.
+//
 // NOTE: This is called automatically using its own scheduled ticks and therefore should
 // not be called directly.
 //------------------------------------------------------------------------------------------

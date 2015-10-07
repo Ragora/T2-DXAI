@@ -19,14 +19,16 @@ function sameSide(%p1, %p2, %a, %b)
     return false;
 }
 
-function SimSet::contains(%this, %contained)
-{
-    for (%iteration = 0; %iteration < %this.getCount(); %iteration++)
-        if (%this.getObject(%iteration) == %contained)
-            return true;
-    return false;
-}
-
+//------------------------------------------------------------------------------------------
+// Description: Returns whether or not the given point resides inside of the triangle
+// denoted by points %a, %b and %c.
+// Param %point: The point to test.
+// Param %a: One point of the triangle.
+// Param %b: One point of the triangle.
+// Param %c: One point of the triangle.
+// Return: A boolean representing whether or not the given point resides inside of the 
+// triangle.
+//------------------------------------------------------------------------------------------
 function pointInTriangle(%point, %a, %b, %c)
 {
     if (sameSide(%point, %a, %b, %c) && sameSide(%point, %b, %a, %c) && sameSide(%point, %c, %a, %b))
@@ -35,13 +37,25 @@ function pointInTriangle(%point, %a, %b, %c)
     return false;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Calculates all the points of the given client's view cone given a maximum
+// view distance and returns them in a long string.
+// Param %distance: The distance of their view cone.
+// Return: A string in the following format:
+// "OriginX OriginY OriginZ Outer1X Outer1Y Outer1Z Outer2X Outer2Y Outer2Z UpperX UpperY UpperZ
+// LowerX LowerY LowerZ"
+//
 // TODO: Return in a faster-to-read format: Could try as static GVar names
 // as the game's scripting environment for the gameplay is single threaded
 // and it probably does a hash to store the values.
-// TODO: Mathematical optimizations, right now it's a hack because of no
+// FIXME: Mathematical optimizations, right now it's a hack because of no
 // reliable way of getting a player's X facing?
+//------------------------------------------------------------------------------------------
 function GameConnection::calculateViewCone(%this, %distance)
 {
+    if (!isObject(%this.player) || %this.player.getState() !$= "Move")
+        return -1;
+        
     //%xFacing = %this.player.getXFacing();
     %halfView = %this.fieldOfView / 2;
     %coneOrigin = %this.player.getMuzzlePoint($WeaponSlot);
@@ -93,8 +107,8 @@ function GameConnection::calculateViewCone(%this, %distance)
 //------------------------------------------------------------------------------------------
 // Description: Returns a SimSet of all contained object ID's inside of the given SimSet,
 // including those in child SimGroup and SimSet instances.
-// TODO: Use the nav graph to estimate an actual distance?
-// FIXME: Return *working* stations only.
+// Return: The ID of the SimSet that contains all child objects that are not containers
+// themselves.
 //------------------------------------------------------------------------------------------
 function SimSet::recurse(%this, %result)
 {
@@ -118,6 +132,7 @@ function SimSet::recurse(%this, %result)
 // Description: Returns the closest friendly inventory station to the given client.
 // Return: The object ID of the inventory station determined to be the closest to this
 // client.
+//
 // TODO: Use the nav graph to estimate an actual distance?
 // FIXME: Return *working* stations only.
 //------------------------------------------------------------------------------------------
@@ -224,6 +239,9 @@ function GameConnection::getObjectsInViewcone(%this, %typeMask, %distance, %perf
     return %result;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Gets a random position somewhere within %distance of the given position.
+//------------------------------------------------------------------------------------------
 function getRandomPosition(%position, %distance, %raycast)
 {
     // First, we determine a random direction vector

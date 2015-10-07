@@ -126,6 +126,10 @@ function PriorityQueue::topKey(%this)
     return %this.keys[%this.count - 1];
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Pops off the value with the current highest key (priority). This value
+// is then no longer present in the priority queue.
+//------------------------------------------------------------------------------------------
 function PriorityQueue::pop(%this)
 {
     if (%this.count == 0)
@@ -135,6 +139,9 @@ function PriorityQueue::pop(%this)
     %this.count--;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Makes the entire priority queue empty.
+//------------------------------------------------------------------------------------------
 function PriorityQueue::clear(%this)
 {
     for (%iteration = 0; %iteration < %this.count; %iteration++)
@@ -143,17 +150,33 @@ function PriorityQueue::clear(%this)
     %this.count = 0;
 }
 
-function Priorityqueue::isEmpty(%this)
+//------------------------------------------------------------------------------------------
+// Description: Returns whether or not the priority queue is empty.
+// Return: A boolean representing whether or not the priority queue is empty.
+//------------------------------------------------------------------------------------------
+function PriorityQueue::isEmpty(%this)
 {
-    return %this.count == 0;
+    return %this.count <= 0;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Prints a mapping of key (priority) to their respective values to the console
+// for debugging purposes. The format is such:
+// Key (Priority) -> Mapped Value
+//------------------------------------------------------------------------------------------
 function PriorityQueue::dump(%this)
 {
     for (%iteration = 0; %iteration < %this.count; %iteration++)
         echo(%iteration SPC %this.keys[%iteration] SPC "-> " @ %this.values[%iteration]);
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Creates a new priority queue with the given name and returns the ID of
+// the new priority queue created.
+// Param %name: The name of the new priority queue.
+//
+// Usage: %queue = PriorityQueue::create("MyQueue");
+//------------------------------------------------------------------------------------------
 function PriorityQueue::create(%name)
 {
     %result = new ScriptObject(%name) 

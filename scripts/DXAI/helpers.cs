@@ -90,6 +90,12 @@ function GameConnection::calculateViewCone(%this, %distance)
     return %coneOrigin SPC %viewConeClockwisePoint SPC %viewConeCounterClockwisePoint SPC %viewConeUpperPoint SPC %viewConeLowerPoint;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Returns a SimSet of all contained object ID's inside of the given SimSet,
+// including those in child SimGroup and SimSet instances.
+// TODO: Use the nav graph to estimate an actual distance?
+// FIXME: Return *working* stations only.
+//------------------------------------------------------------------------------------------
 function SimSet::recurse(%this, %result)
 {
   if (!isObject(%result))
@@ -108,7 +114,13 @@ function SimSet::recurse(%this, %result)
   return %result;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Returns the closest friendly inventory station to the given client.
+// Return: The object ID of the inventory station determined to be the closest to this
+// client.
 // TODO: Use the nav graph to estimate an actual distance?
+// FIXME: Return *working* stations only.
+//------------------------------------------------------------------------------------------
 function GameConnection::getClosestInventory(%this)
 {
   if (!isObject(%this.player))
@@ -143,7 +155,16 @@ function GameConnection::getClosestInventory(%this)
   return %closestInventory;
 }
 
-// View cone simulation function
+//------------------------------------------------------------------------------------------
+// Description: Calculates a list of objects that can be seen by the given client using
+// distance & field of view values passed in for evaluation.
+// Param %typeMask: The typemask of all objects to consider.
+// Param %distance: The maximum distance to project our view cone checks out to.
+// Param %performLOSTest: A boolean representing whether or not found objects should be
+// verified using a raycast test. If you cannot draw a line from the player to the potential
+// target, then it the potential target is discarded.
+// Return: A SimSet of objects that can be seen by the given client.
+//------------------------------------------------------------------------------------------
 function GameConnection::getObjectsInViewcone(%this, %typeMask, %distance, %performLOSTest)
 {
     // FIXME: Radians
@@ -203,12 +224,21 @@ function GameConnection::getObjectsInViewcone(%this, %typeMask, %distance, %perf
     return %result;
 }
 
-function getRandomPosition(%position, %distance)
+function getRandomPosition(%position, %distance, %raycast)
 {
     // First, we determine a random direction vector
     %direction = vectorNormalize(getRandom(0, 10000) SPC getRandom(0, 10000) SPC getRandom(0, 10000));
+    
     // Return the scaled result
-    return vectorAdd(%position, vectorScale(%direction, getRandom(0, %distance)));
+    %result = vectorAdd(%position, vectorScale(%direction, getRandom(0, %distance)));
+    
+    if (!%raycast)
+        return %result;
+    
+    %rayCast = containerRayCast(%position, %result, $TypeMasks::AllObjectType, 0);
+    %result = getWords(%raycast, 1, 3);
+    
+    return %result;
 }
 
 function getRandomPositionOnTerrain(%position, %distance)

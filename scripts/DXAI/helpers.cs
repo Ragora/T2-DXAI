@@ -188,7 +188,7 @@ function GameConnection::getObjectsInViewcone(%this, %typeMask, %distance, %perf
                 %result.add(%currentObject);
             else
             {
-                %rayCast = containerRayCast(%coneOrigin, %currentObject.getWorldBoxCenter(), -1, 0);
+                %rayCast = containerRayCast(%coneOrigin, %currentObject.getWorldBoxCenter(), $TypeMasks::AllObjectType, %this.player);
                 
                 %hitObject = getWord(%raycast, 0);
                 
@@ -222,6 +222,16 @@ function vectorMultiply(%vec1, %vec2)
     return (getWord(%vec1, 0) * getWord(%vec2, 0)) SPC 
     (getWord(%vec1, 1) * getWord(%vec2, 1)) SPC 
     (getWord(%vec1, 2) * getWord(%vec2, 2));
+}
+
+function listStuckBots()
+{
+    for (%iteration = 0; %iteration < ClientGroup.getCount(); %iteration++)
+    {
+        %client = ClientGroup.getObject(%iteration);
+        if (%client.isAIControlled() && %client.isPathCorrecting)
+            error(%client);
+    }
 }
 
 // If the map editor was instantiated, this will prevent a little bit

@@ -9,15 +9,10 @@
 // Refer to LICENSE.txt for more information.
 //------------------------------------------------------------------------------------------
 
-function AIConnection::initialize(%this, %aiClient)
+function AIConnection::initialize(%this)
 {
     %this.fieldOfView = 3.14 / 2; // 90* View cone
     %this.viewDistance = 300;
-    
-    if (!isObject(%aiClient))
-        error("AIPlayer: Attempted to initialize with bad AI client connection!");
-        
-    %this.client = %aiClient;
 }
 
 function AIConnection::update(%this)
@@ -77,6 +72,9 @@ function AIConnection::setMoveTarget(%this, %position)
     %this.isFollowingTarget = false;
     %this.setPath(%position);
     %this.stepMove(%position);
+    
+    %this.minimumPathDistance = 9999;
+    %this.maximumPathDistance = -9999;
 }
 
 function AIConnection::setFollowTarget(%this, %target, %minDistance, %maxDistance, %hostile)
@@ -97,14 +95,72 @@ function AIConnection::setFollowTarget(%this, %target, %minDistance, %maxDistanc
     %this.stepEscort(%target);
 }
 
+function AIConnection::stuckCheck(%this)
+{
+    if (isEventPending(%this.stuckCheckTick))
+        cancel(%this.stuckCheckTick);
+    
+    %targetDistance = %this.pathDistRemaining(9000);
+    if (!%this.isMovingToTarget || !isObject(%this.player) || %this.player.getState() !$= "Move" || %targetDistance <= 5)
+    {
+        %this.stuckCheckTick = %this.schedule(5000, "stuckCheck");
+        return;
+    }
+        
+    if (!%this.isPathCorrecting && %targetDistance >= %this.minimumPathDistance && %this.minimumPathDistance != 9999)
+        %this.isPathCorrecting = true;           
+   
+    if (%targetDistance > %this.maximumPathDistance)
+        %this.maximumPathDistance = %targetDistance;
+    if (%targetDistance < %this.minimumPathDistance)
+        %this.minimumPathDistance = %targetDistance;
+    
+    %this.stuckCheckTick = %this.schedule(5000, "stuckCheck");
+}
+
 function AIConnection::updateLegs(%this)
 {
+    %now = getSimTime();
+    %delta = %now - %this.lastUpdateLegs;
+    %this.lastUpdateLegs = %now;
+    
     if (%this.isMovingToTarget)
     {
         if (%this.aimAtLocation)
             %this.aimAt(%this.moveTarget);
         else if(%this.manualAim)
             %this.aimAt(%this.moveTarget);
+            
+        %targetDistance = %this.pathDistRemaining(9000);
+        
+        if (%targetDistance > %this.maximumPathDistance)
+            %this.maximumPathDistance = %targetDistance;
+         if (%targetDistance < %this.minimumPathDistance)
+            %this.minimumPathDistance = %targetDistance;
+    
+        // Bots follow a set of lines drawn between nodes to slowly decrement the path distance,
+        // so bots that are stuck usually get their remaining distance stuck in some range of
+        // arbitrary values, so we monitor the minimum and maximum values over a period of 5 seconds
+            
+        // Test...
+        %pathDistance = %this.getPathDistance(%this.moveTarget);
+        if(%pathDistance > 10 && %this.moveTravelTime < 10000)
+            %this.moveTravelTime += %delta;
+        else if (%pathDistance < 10)
+            %this.moveTravelTime = 0;
+        else if (%this.moveTravelTime >= 10000)
+        {
+            // We appear to be stuck, so pick a random nearby node and try to run to it
+            %this.moveTravelTime = 0;
+            %this.isPathCorrecting = true;
+            
+            if (isObject(NavGraph))
+            {
+                %randomNode = NavGraph.randNode(%this.player.getPosition(), 200, true, true);
+                if (%randomNode != -1)
+                    %this.setMoveTarget(NavGraph.nodeLoc(%randomNode));
+            }
+        }
     }
     else if (%this.isFollowingTarget)
     {
@@ -119,7 +175,24 @@ function AIConnection::updateLegs(%this)
 
 function AIConnection::updateWeapons(%this)
 {
-  
+    if (isObject(%this.engageTarget))
+    {
+        %player = %this.player;
+        %targetDistance = vectorDist(%player.getPosition(), %this.engageTarget.getPosition());
+            
+        // Firstly, just aim at them for now
+        %this.aimAt(%this.engageTarget.getWorldBoxCenter());
+            
+        // What is our current best weapon? Right now we just check target distance and weapon spread.
+        %bestWeapon = 0;
+            
+        for (%iteration = 0; %iteration < %player.weaponSlotCount; %iteration++)
+        {
+        // Weapons with a decent bit of spread should be used <= 20m
+        }
+            
+        %player.selectWeaponSlot(%bestWeapon);
+    }
 }
 
 function AIConnection::updateVisualAcuity(%this)
@@ -127,7 +200,7 @@ function AIConnection::updateVisualAcuity(%this)
     if (isEventPending(%this.visualAcuityTick))
         cancel(%this.visualAcuityTick);
         
-    if (!isObject(%this.player) || %this.player.getState() !$= "Move")
+    if (%this.visibleDistance = 0 || !isObject(%this.player) || %this.player.getState() !$= "Move")
     {
         %this.visualAcuityTick = %this.schedule(getRandom(230, 400), "updateVisualAcuity");
         return;
@@ -167,24 +240,26 @@ function AIConnection::updateVisualAcuity(%this)
         %this.upperMarker.delete();
         %this.lowerMarker.delete();
     }
+   
+    %now = getSimTime();
+    %deltaTime = %now - %this.lastVisualAcuityUpdate;
+    %this.lastVisualAcuityUpdate = %now;
     
-    %result = %this.getObjectsInViewcone($TypeMasks::ProjectileObjectType | $TypeMasks::PlayerObjectType, %this.viewDistance, true);
-    
-    // What can we see?
-    for (%i = 0; %i < %result.getCount(); %i++)
+    %visibleObjects = %this.getObjectsInViewcone($TypeMasks::ProjectileObjectType | $TypeMasks::PlayerObjectType, %this.viewDistance, true);
+
+    for (%iteration = 0; %iteration < %visibleObjects.getCount(); %iteration++)
     {
-        %current = %result.getObject(%i);
-        %this.awarenessTicks[%current]++;
+        %current = %visibleObjects.getObject(%iteration);
+            
+        %this.awarenessTime[%current] += %deltaTime;
+        
+        // Did we "notice" the object yet?
+        %noticeTime = getRandom(700, 1200);
+        if (%this.awarenessTime[%current] < %noticeTime)
+            continue;
         
         if (%current.getType() & $TypeMasks::ProjectileObjectType)
-        {   
-            // Did we "notice" the object yet?
-            // We pick a random notice time between 700ms and 1200 ms
-            // Obviously this timer runs on a 32ms tick, but it should help provide a little unpredictability
-            %noticeTime = getRandom(700, 1200);
-            if (%this.awarenessTicks[%current] < (%noticeTime / 32))
-                continue;
-            
+        {               
             %className = %current.getClassName();
             
             // LinearFlareProjectile and LinearProjectile have linear trajectories, so we can easily determine if a dodge is necessary
@@ -223,26 +298,43 @@ function AIConnection::updateVisualAcuity(%this)
             }
         }
         // See a player?
-        else if (%current.getType() & $TypeMasks::PlayerObjectType)
+        else if (%current.getType() & $TypeMasks::PlayerObjectType && %current.client.team != %this.team)
         {
-            %this.clientDetected(%current);
-            %this.clientDetected(%current.client);
+            %this.visibleHostiles.add(%current);
+            //%this.clientDetected(%current);
+           // %this.clientDetected(%current.client);
             
             // ... if the moron is right there in our LOS then we probably should see them
-            %start = %this.player.getPosition();
-            %end = vectorAdd(%start, vectorScale(%this.player.getEyeVector(), %this.viewDistance));
+           // %start = %this.player.getPosition();
+           // %end = vectorAdd(%start, vectorScale(%this.player.getEyeVector(), %this.viewDistance));
             
-            %rayCast = containerRayCast(%start, %end, -1, %this.player);     
-            %hitObject = getWord(%raycast, 0);
+           // %rayCast = containerRayCast(%start, %end, -1, %this.player);     
+           // %hitObject = getWord(%raycast, 0);
 
-            if (%hitObject == %current)
-            {
-                %this.clientDetected(%current);
-                %this.stepEngage(%current);
-            }
+           // if (%hitObject == %current)
+           // {
+               // %this.clientDetected(%current);
+            //    %this.stepEngage(%current);
+           // }
         }
     }
     
-    %result.delete();
-    %this.visualAcuityTick = %this.schedule(getRandom(230, 400), "updateVisualAcuity");
+    // Now we run some logic on some things that we no longer can see.
+    for (%iteration = 0; %iteration < %this.visibleHostiles.getCount(); %iteration++)
+    {
+        %current = %this.visibleHostiles.getObject(%iteration);
+        
+        if (%this.visibleHostiles.isMember(%current) && !%visibleObjects.isMember(%current))
+        {
+            %this.awarenessTime[%current] -= %deltaTime;
+            if (%this.awarenessTime[%current] < 200)
+            {
+                %this.visibleHostiles.remove(%current);
+                continue;
+            }
+        }
+    }
+        
+    %visibleObjects.delete();
+    %this.visualAcuityTick = %this.schedule(getRandom($DXAI::Bot::MinimumVisualAcuityTime, $DXAI::Bot::MaximumVisualAcuityTime), "updateVisualAcuity");
 }

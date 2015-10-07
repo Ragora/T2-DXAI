@@ -245,6 +245,9 @@ package DXAI_Hooks
         %client.shouldRearm = true;
         %client.targetLoadout = 1;
         
+        %client.engageTargetLastPosition = "";
+        %client.engageTarget = -1;
+        
         return 11595;
     }
     
@@ -270,8 +273,24 @@ package DXAI_Hooks
         //switch$ (%eventTag)
         //{
         schedule(250, %targetClient, "AIPlayAnimSound", %targetClient, %clientPos, "cmd.decline", $AIAnimSalute, $AIAnimSalute, 0);
-        schedule(2000, %targetClient, "AIPlayAnimSound", %targetClient, %clientPos, ObjectiveNameToVoice(%targetClient.getTaskName()), $AIAnimSalute, $AIAnimSalute, 0);
+        schedule(2000, %targetClient, "AIPlayAnimSound", %targetClient, %clientPos, ObjectiveNameToVoice(%targetClient), $AIAnimSalute, $AIAnimSalute, 0);
         schedule(3700, %targetClient, "AIPlayAnimSound", %targetClient, %clientPos,  "vqk.sorry", $AIAnimSalute, $AIAnimSalute, 0);
+    }
+    
+    function AISystemEnabled(%enabled)
+    {
+        parent::AISystemEnabled(%enabled);
+        
+        echo(%enabled);
+        $DXAI::AISystemEnabled = %enabled;
+    }
+    
+    function AIConnection::onAIDrop(%client)
+    {
+        parent::onAIDrop(%client);
+        
+        if (isObject(%client.visibleHostiles))
+            %client.visibleHostiles.delete();
     }
     
     function Station::stationTriggered(%data, %obj, %isTriggered)

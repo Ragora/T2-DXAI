@@ -13,3 +13,6 @@ $DXAI::Commander::minimumGeneratorDefense = 1;
 
 $DXAI::Bot::DefaultFieldOfView = 3.14159 / 2; // 90*
 $DXAI::Bot::DefaultViewDistance = 300;
+
+$DXAI::Bot::MinimumVisualAcuityTime = 200;
+$DXAI::Bot::MaximumVisualAcuityTime = 400;

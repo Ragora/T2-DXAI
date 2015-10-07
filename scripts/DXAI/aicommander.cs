@@ -34,7 +34,6 @@ function AICommander::setup(%this)
     for (%iteration = 0; %iteration < ClientGroup.getCount(); %iteration++)
     {
         %currentClient = ClientGroup.getObject(%iteration);
-        %currentClient.updateVisualAcuity();
         
         if (%currentClient.isAIControlled() && %currentClient.team == %this.team)
         {
@@ -42,6 +41,11 @@ function AICommander::setup(%this)
             %this.idleBotList.add(%currentClient);
             
             %currentClient.commander = %this;
+            
+            %currentClient.initialize();
+            %currentClient.visibleHostiles = new SimSet();
+            %currentClient.updateVisualAcuity();
+            %currentClient.stuckCheck();
         }
     }
     
@@ -74,9 +78,7 @@ function AICommander::_skimObjectiveGroup(%this, %group)
                 case "AIODefendLocation":
                     // FIXME: Console spam from .targetObjectID not being set?
                     %datablockName = %current.targetObjectID.getDatablock().getName();
-                    
-                    echo(%datablockName);
-                    
+                                        
                     // Defending the flag?
                     if (%datablockName $= "FLAG")
                         %this.objectiveCycles[$DXAI::Priorities::DefendFlag].add(%current);
@@ -243,14 +245,24 @@ function AICommander::assignTask(%this, %taskID, %bot)
             %objective = %this.objectiveCycles[%taskID].next();
             
             // Set the bot to defend the location
-            %bot.defendLocation = %objective.location;
+            %bot.defendTargetLocation = %objective.location;
+            %datablockName = %objective.targetObjectID.getDatablock().getName();
+            
+            switch$(%datablockName)
+            {
+                case "FLAG":
+                    %bot.defenseDescription = "flag";
+                case "GeneratorLarge":
+                    %bot.defenseDescription = "generator";
+            }
+                  
             %bot.addTask("AIEnhancedDefendLocation");
             
         case $DXAI::Priorities::ScoutBase:
             %objective = %this.objectiveCycles[%taskID].next();
             
             // Set the bot to defend the location
-            %bot.scoutLocation = %objective.location;
+            %bot.scoutTargetLocation = %objective.location;
             %bot.scoutDistance = %objective.distance;
             %bot.addTask("AIEnhancedScoutLocation");
     }
@@ -267,6 +279,13 @@ function AICommander::setDefaultPriorities(%this)
 
 function AICommander::cleanUp(%this)
 {
+    for (%iteration = 0; %iteration < %this.botList.getCount(); %iteration++)
+    {
+        %current = %this.botList.getObject(%iteration);
+        cancel(%current.visualAcuityTick);
+        cancel(%current.stuckCheckTick);
+    }
+        
     %this.botList.delete();
     %this.idleBotList.delete();
 }

@@ -3,7 +3,7 @@
 // Configuration file for the experimental DXAI system.
 // https://github.com/Ragora/T2-DXAI.git
 //
-// Copyright (c) 2014 Robert MacGregor
+// Copyright (c) 2015 Robert MacGregor
 // This software is licensed under the MIT license. 
 // Refer to LICENSE.txt for more information.
 //------------------------------------------------------------------------------------------

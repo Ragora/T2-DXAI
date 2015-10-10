@@ -3,7 +3,7 @@
 // Helper functions used in the experimental DXAI system.
 // https://github.com/Ragora/T2-DXAI.git
 //
-// Copyright (c) 2014 Robert MacGregor
+// Copyright (c) 2015 Robert MacGregor
 // This software is licensed under the MIT license. 
 // Refer to LICENSE.txt for more information.
 //------------------------------------------------------------------------------------------
@@ -49,7 +49,9 @@ function pointInTriangle(%point, %a, %b, %c)
 // as the game's scripting environment for the gameplay is single threaded
 // and it probably does a hash to store the values.
 // FIXME: Mathematical optimizations, right now it's a hack because of no
-// reliable way of getting a player's X facing?
+// reliable way of getting a player's X facing? Also, the horizontal view cones may
+// be all that's necessary. A player height check could be used to help alleviate
+// computational complexity.
 //------------------------------------------------------------------------------------------
 function GameConnection::calculateViewCone(%this, %distance)
 {
@@ -243,6 +245,9 @@ function GameConnection::getObjectsInViewcone(%this, %typeMask, %distance, %perf
 // Description: Gets a random position somewhere within %distance of the given position.
 // Param %position: The position to generate a new position around.
 // Param %distance: The maximum distance the new position may be 
+// Param %raycast: A boolean representing whether or not a raycast should be made from
+// %position to the randomly chosen location to stop on objects that may be in the way.
+// This is useful for grabbing positions indoors.
 //------------------------------------------------------------------------------------------
 function getRandomPosition(%position, %distance, %raycast)
 {
@@ -261,13 +266,27 @@ function getRandomPosition(%position, %distance, %raycast)
     return %result;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Gets a random position somewhere within %distance of the given position
+// relative to the terrain object using getTerrainHeight. This is faster to use than
+// getRandomPosition with the raycast setting if all that is necessary is generating a
+// position relative to the terrain object.
+// Param %position: The position to generate a new position around.
+// Param %distance: The maximum distance the new position may be 
+//------------------------------------------------------------------------------------------
 function getRandomPositionOnTerrain(%position, %distance)
 {
     %result = getRandomPosition(%position, %distance);
     return setWord(%result, 2, getTerrainHeight(%result));
 }
 
-function vectorMultiply(%vec1, %vec2)
+//------------------------------------------------------------------------------------------
+// Description: Multiplies two vectors together and returns the result.
+// Param %vec1: The first vector to multiply.
+// Param %vec2: The second vector to multiply.
+// Return: The product of the multiplication.
+//------------------------------------------------------------------------------------------
+function vectorMult(%vec1, %vec2)
 {
     return (getWord(%vec1, 0) * getWord(%vec2, 0)) SPC 
     (getWord(%vec1, 1) * getWord(%vec2, 1)) SPC 

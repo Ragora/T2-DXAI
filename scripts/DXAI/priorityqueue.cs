@@ -6,7 +6,7 @@
 // FIXME: Make the keys regular priorities so more than one value can occupy the same
 // priority value.
 //
-// Copyright (c) 2014 Robert MacGregor
+// Copyright (c) 2015 Robert MacGregor
 // This software is licensed under the MIT license. Refer to LICENSE.txt for more information.
 //------------------------------------------------------------------------------------------
 

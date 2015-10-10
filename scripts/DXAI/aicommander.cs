@@ -3,7 +3,22 @@
 // Source file for the DXAI commander AI implementation.
 // https://github.com/Ragora/T2-DXAI.git
 //
-// Copyright (c) 2014 Robert MacGregor
+// The AICommander type is a complex beast. They have the following proerties associated
+// with them:
+//      * %commander.botList: A SimSet of all bots that are currently associated with the 
+// given commander.
+//      * %commander.idleBotList: A SimSet of all bots that are currently considered be idle.
+// These bots were not explicitly given anything to do by the commander AI and so they are
+// not doing anything particularly helpful.
+//      * %commander.botAssignments[%assignmentID]: An associative container that maps
+// assignment ID's (those desiginated by $DXAI::Priorities::*) to the total number of
+// bots assigned.
+//      * %commander.objectiveCycles[%assignmentID]: An associative container that maps assignment 
+// ID's (those desiginated by $DXAI::Priorities::*) to an instance of a CyclicSet which contains
+// the ID's of AI nav graph placed objective markers to allow for cycling through the objectives
+// set for the team.
+//
+// Copyright (c) 2015 Robert MacGregor
 // This software is licensed under the MIT license. Refer to LICENSE.txt for more information.
 //------------------------------------------------------------------------------------------
 
@@ -18,6 +33,12 @@ $DXAI::Priorities::CaptureObjective = 5;
 $DXAI::Priorities::AttackTurret = 6;
 $DXAI::Priorities::Count = 3;
 
+//------------------------------------------------------------------------------------------
+// Description: These global variables are the default priorities that commanders will 
+// initialize with for specific tasks that can be distributed to the bots on the team. 
+// 
+// NOTE: These should be fairly laid back initially and allow for a good count of idle bots.
+//------------------------------------------------------------------------------------------
 $DXAI::Priorities::DefaultPriorityValue[$DXAI::Priorities::DefendGenerator] = 2;
 $DXAI::Priorities::DefaultPriorityValue[$DXAI::Priorities::DefendFlag] = 3;
 $DXAI::Priorities::DefaultPriorityValue[$DXAI::Priorities::ScoutBase] = 1;
@@ -26,6 +47,11 @@ $DXAI::Priorities::Text[$DXAI::Priorities::DefendGenerator] = "Defending a Gener
 $DXAI::Priorities::Text[$DXAI::Priorities::DefendFlag] = "Defending the Flag";
 $DXAI::Priorities::Text[$DXAI::Priorities::ScoutBase] = "Scouting a Location";
 
+//------------------------------------------------------------------------------------------
+// Description: Sets up the AI commander by creating the bot list sim sets as well as
+// claiming the bots that are currently on their team. Bots claimed will have all of their
+// independent ticks started up such as the visual acuity tick.
+//------------------------------------------------------------------------------------------
 function AICommander::setup(%this)
 {    
     %this.botList = new SimSet();
@@ -44,6 +70,8 @@ function AICommander::setup(%this)
             
             %currentClient.initialize();
             %currentClient.visibleHostiles = new SimSet();
+            
+            // Start our ticks.
             %currentClient.updateVisualAcuity();
             %currentClient.stuckCheck();
         }
@@ -59,6 +87,14 @@ function AICommander::setup(%this)
     }
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Skims the objectives for the AI commander's team and pulls out any that
+// we can use when assigning tasks to bots. This is done with some recursion down the line
+// of nested SimGroup instances. When a usable objective is located, it is added to the
+// cycler associated with the most appropriate task.
+// Param %group: The group to recurse down.
+// NOTE: This is an internal function and therefore should not be called directly.
+//------------------------------------------------------------------------------------------
 function AICommander::_skimObjectiveGroup(%this, %group)
 {
     for (%iteration = 0; %iteration < %group.getCount(); %iteration++)
@@ -93,6 +129,11 @@ function AICommander::_skimObjectiveGroup(%this, %group)
     }
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Loads or reloads the objectives for the AI commander's team. It searches
+// for the AIObjectives group associated with the team (all teams have one called that)
+// and passes it off to _skimObjectGroup which does the actual objective processing.
+//------------------------------------------------------------------------------------------
 function AICommander::loadObjectives(%this)
 {
     // First we clear the old cyclers
@@ -133,6 +174,16 @@ function AICommander::loadObjectives(%this)
     %this.objectiveCycles[$DXAI::Priorities::ScoutBase].add(%scoutLocationObjective);
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Distributes and assigns tasks to all bots under the jurisdiction of the
+// AI commander according to current tasks priorities.
+//
+// TODO: Assign something to bots that are considered to be idle so they can stop sitting
+// on top of the inventory stations like lazy bums.
+// FIXME: This will be called when the commander wants to distribute tasks differently
+// than what was previous set, and so blindly instructing bots to rearm isn't exactly
+// the best choice in hindsight.
+//------------------------------------------------------------------------------------------
 function AICommander::assignTasks(%this)
 {
     // First, assign objectives that all bots should have
@@ -214,6 +265,9 @@ function AICommander::assignTasks(%this)
     %priorityQueue.delete();
 }
 
+//------------------------------------------------------------------------------------------
+// Description:
+//------------------------------------------------------------------------------------------
 function AICommander::deassignBots(%this, %taskID, %count)
 {
     // TODO: More efficient removal?
@@ -271,12 +325,23 @@ function AICommander::assignTask(%this, %taskID, %bot)
     %bot.assignment = %taskID;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Helper function that is used to set the default task prioritizations on
+// the commander object.
+//------------------------------------------------------------------------------------------
 function AICommander::setDefaultPriorities(%this)
 {
     for (%iteration = 0; %iteration < $DXAI::Priorities::Count; %iteration++)
         %this.priorities[%iteration] = $DXAI::Priorities::DefaultPriorityValue[%iteration];
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Performs a deinitialization that should be ran before deleting the 
+// commander object itself.
+//
+// NOTE: This is called automatically by .delete so this shouldn't have to be called
+// directly.
+//------------------------------------------------------------------------------------------
 function AICommander::cleanUp(%this)
 {
     for (%iteration = 0; %iteration < %this.botList.getCount(); %iteration++)
@@ -285,9 +350,19 @@ function AICommander::cleanUp(%this)
         cancel(%current.visualAcuityTick);
         cancel(%current.stuckCheckTick);
     }
-        
+    
     %this.botList.delete();
     %this.idleBotList.delete();
+}
+
+//------------------------------------------------------------------------------------------
+// Description: An overwritten delete function to perform proper cleanup before actually
+// deleting the commander object.
+//------------------------------------------------------------------------------------------
+function AICommander::delete(%this)
+{
+    %this.cleanUp();
+    ScriptObject::delete(%this);
 }
 
 function AICommander::update(%this)
@@ -296,6 +371,10 @@ function AICommander::update(%this)
         %this.botList.getObject(%iteration).update();
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Removes the given bot from this AI commander's jurisdiction.
+// Param %bot: The AIConnection to remove.
+//------------------------------------------------------------------------------------------
 function AICommander::removeBot(%this, %bot)
 {
     %this.botList.remove(%bot);
@@ -304,15 +383,23 @@ function AICommander::removeBot(%this, %bot)
     %bot.commander = -1;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: Adds the given bot to the jurisdiction of this AI commander if the bot and
+// commander work for the same team.
+// Param %bot: The AIConnection to add.
+// Return: A boolean representing whether or not the bot was successfully added. False is
+// returned if the two are not on the same time at the time of adding.
+//------------------------------------------------------------------------------------------
 function AICommander::addBot(%this, %bot)
 {
-    if (!%this.botList.isMember(%bot))
-        %this.botList.add(%bot);
-    
-    if (!%this.idleBotList.isMember(%bot))
-        %this.idleBotList.add(%bot);
+    if (%bot.team != %this.team)
+        return false;
+        
+    %this.botList.add(%bot);
+    %this.idleBotList.add(%bot);
     
     %bot.commander = %this;
+    return true;
 }
 
 function AICommander::notifyPlayerDeath(%this, %killedClient, %killedByClient)

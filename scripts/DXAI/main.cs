@@ -3,7 +3,7 @@
 // Main source file for the DXAI experimental AI enhancement project.
 // https://github.com/Ragora/T2-DXAI.git
 //
-// Copyright (c) 2014 Robert MacGregor
+// Copyright (c) 2015 Robert MacGregor
 // This software is licensed under the MIT license. Refer to LICENSE.txt for more information.
 //------------------------------------------------------------------------------------------
 
@@ -16,20 +16,28 @@ exec("scripts/DXAI/priorityqueue.cs");
 exec("scripts/DXAI/cyclicset.cs");
 exec("scripts/DXAI/loadouts.cs");
 
-// General DXAI API implementations
+//------------------------------------------------------------------------------------------
+// Description: This cleanup function is called when the mission ends to clean up all
+// active commanders and to delete them for the next mission which guarantees a blank
+// slate.
+//------------------------------------------------------------------------------------------
 function DXAI::cleanup()
 {
     $DXAI::System::Setup = false;
     
     for (%iteration = 1; %iteration < $DXAI::ActiveCommanderCount + 1; %iteration++)
-    {
-        $DXAI::ActiveCommander[%iteration].cleanup();
         $DXAI::ActiveCommander[%iteration].delete();
-    }
     
     $DXAI::ActiveCommanderCount = 0;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: This cleanup function is called when the mission starts to to instantiate
+// and setup all AI commanders for the game.
+// Param %numTeams: The number of teams to initialize for.
+//
+// TODO: Perhaps calculate %numTeams from the game object?
+//------------------------------------------------------------------------------------------
 function DXAI::setup(%numTeams)
 {
     // Mark the environment as invalidated for each new run so that our hooks
@@ -61,6 +69,21 @@ function DXAI::setup(%numTeams)
     $DXAI::ActiveCommanderCount = %numTeams;
 }
 
+//------------------------------------------------------------------------------------------
+// Why: Due to the way the AI system must hook into some functions and the way game 
+// modes work, we must generate runtime overrides for some gamemode related functions. We
+// can't simply hook DefaultGame functions base game modes will declare their own and so
+// we'll need to hook those functions post-start as the game mode scripts are executed for
+// each mission run.
+// Description: This function is called once per update tick (roughly 32 milliseconds) to
+// check that the hooks we need are actually active if the system detects that may be a
+// necessity to do so. A runtime check is initiated at gamemode start and for each exec
+// call made during runtime as any given exec can overwrite the hooks we required.
+// If they were not overwritten, the function will return 11595 and do nothing else if the 
+// appropriate dummy parameters are passed in.
+//
+// TODO: Perhaps calculate %numTeams from the game object?
+//------------------------------------------------------------------------------------------
 function DXAI::validateEnvironment()
 {
         %gameModeName = $CurrentMissionType @ "Game";
@@ -90,6 +113,14 @@ function DXAI::validateEnvironment()
         $DXAI::System::InvalidatedEnvironment = false;
 }
 
+//------------------------------------------------------------------------------------------
+// Description: This update function is scheduled to be called roughly once every 32
+// milliseconds which updates each active commander in the game as well as performs
+// an environment validation if necessary.
+//
+// NOTE: This is called on its own scheduled tick, therefore it should not be called
+// directly.
+//------------------------------------------------------------------------------------------
 function DXAI::update()
 {
     if (isEventPending($DXAI::updateHandle))
@@ -116,9 +147,19 @@ function DXAI::notifyPlayerDeath(%killed, %killedBy)
         $DXAI::ActiveCommander[%iteration].notifyPlayerDeath(%killed, %killedBy);
 }
 
-// Hooks for the AI System
+//------------------------------------------------------------------------------------------
+// Description: There is a series of functions that the AI code can safely hook without
+// worry of being overwritten implicitly such as the disconnect or exec functions. For
+// those that can be, there is an environment validation that is performed to ensure that
+// the necessary code will be called in response to the events we need to know about in
+// this AI system.
+//------------------------------------------------------------------------------------------
 package DXAI_Hooks
 {
+    //------------------------------------------------------------------------------------------
+    // Description: Called when the mission ends. We use this to perform any necessary cleanup
+    // operations between games.
+    //------------------------------------------------------------------------------------------
     function DefaultGame::gameOver(%game)
     {
         parent::gameOver(%game);
@@ -126,6 +167,10 @@ package DXAI_Hooks
         DXAI::cleanup();
     }
     
+    //------------------------------------------------------------------------------------------
+    // Description: Called when the mission starts. We use this to perform initialization and
+    // to start the update ticks.
+    //------------------------------------------------------------------------------------------
     function DefaultGame::startMatch(%game)
     {
         parent::startMatch(%game);
@@ -134,14 +179,22 @@ package DXAI_Hooks
         DXAI::update();
     }
     
-    // Listen server fix
+    //------------------------------------------------------------------------------------------
+    // Description: We hook the disconnect function as a step to fix console spam from leaving
+    // a listen server due to the AI code continuing to run post-server shutdown in those
+    // cases.
+    //------------------------------------------------------------------------------------------
     function disconnect()
     {
         parent::disconnect();
         
-        DXAI::Cleanup();
+        DXAI::cleanup();
     }
     
+    //------------------------------------------------------------------------------------------
+    // Description: In the game, bots can be made to change teams which means we need to hook
+    // this event so that commander affiliations can be properly updated.
+    //------------------------------------------------------------------------------------------
     function DefaultGame::AIChangeTeam(%game, %client, %newTeam)
     {
         // Remove us from the old commander's control first
@@ -152,6 +205,10 @@ package DXAI_Hooks
         $DXAI::ActiveCommander[%newTeam].addBot(%client);
     }
     
+    //------------------------------------------------------------------------------------------
+    // Description: In the game, bots can be kicked like regular players so we hook this to
+    // ensure that commanders are properly notified of lesser bot counts.
+    //------------------------------------------------------------------------------------------
     function AIConnection::onAIDrop(%client)
     {
         if (isObject(%client.commander))
@@ -175,6 +232,11 @@ package DXAI_Hooks
         DXAI::notifyPlayerDeath(%clVictim, %clKiller);
     }
     
+    //------------------------------------------------------------------------------------------
+    // Description: We hook this function to implement some basic sound simulation for bots.
+    // This means that if something explodes, a bot will hear it and if the sound is close
+    // enough, they will shimmy away from the source using setDangerLocation.
+    //------------------------------------------------------------------------------------------
     function ProjectileData::onExplode(%data, %proj, %pos, %mod)
     {
         parent::onExplode(%data, %proj, %pos, %mod);
@@ -223,8 +285,11 @@ package DXAI_Hooks
         }
     }
     
-    // The CreateServer function is hooked so that we can try and guarantee that the DXAI gamemode hooks still
-    // exist in the runtime. 
+    //------------------------------------------------------------------------------------------
+    // Description: This function is hooked so that we can try and guarantee that the DXAI 
+    // gamemode hooks still exist in the runtime as game mode scripts are executed for each
+    // mission load.
+    //------------------------------------------------------------------------------------------
     function CreateServer(%mission, %missionType)
     {   
         // Perform the default exec's

@@ -3,18 +3,9 @@
 // Source file for the DXAI enhanced objective implementations. 
 // https://github.com/Ragora/T2-DXAI.git
 //
-// Copyright (c) 2014 Robert MacGregor
+// Copyright (c) 2015 Robert MacGregor
 // This software is licensed under the MIT license. Refer to LICENSE.txt for more information.
 //------------------------------------------------------------------------------------------
-
-// Weights
-// AIEnhancedFlagCaptureTask - $DXAI::Task::MediumPriority
-// AIEnhancedEscort - $DXAI::Task::MediumPriority
-// AIEnhancedDefendLocation - $DXAI::Task::MediumPriority
-// AIEnhancedScoutLocation - $DXAI::Task::MediumPriority
-// AIEnhancedEngageTarget - $DXAI::Task::VeryHighPriority
-// AIEnhancedReturnFlagTask - $DXAI::Task::HighPriority
-// AIEnhancedRearmTask - $DXAI::Task::HighPriority
 
 $DXAI::Task::NoPriority = 0;
 $DXAI::Task::LowPriority = 100;

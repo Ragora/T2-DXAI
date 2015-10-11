@@ -259,15 +259,15 @@ function AIConnection::updateWeapons(%this)
             %currentWeaponImage = %currentWeapon.image;
             
             // No ammo?
-            if (isObject(%currentWeaponImage.ammo) && %this.player.inv[%currentWeaponImage.ammo] <= 0)
+            if (%currentWeapon.usesAmmo && %this.player.inv[%currentWeapon.ammoDB] <= 0)
                 continue;
             
-            if (%currentWeaponImage.projectileSpread >= 3 && %targetDistance <= 20)
+            if (%targetDistance <= %currentWeapon.dryEffectiveRange)
                 %bestWeapon = %iteration;
-            else if (%currentWeaponImage.projectileSpread < 3 && %targetDistance >= 20)
-                %bestWeapon = %iteration;
-            else if (%targetDistance >= 100 && %currentWeaponImage.projectileType $= "GrenadeProjectile")
-                %bestWeapon = %iteration;
+           // else if (%currentWeapon.spread < 3 && %targetDistance >= 20)
+            //    %bestWeapon = %iteration;
+           // else if (%targetDistance >= 100 && %currentWeapon.projectileType $= "GrenadeProjectile")
+           //     %bestWeapon = %iteration;
             
         // Weapons with a decent bit of spread should be used <= 20m
         // Arced & precision Weapons should be used at >= 100m

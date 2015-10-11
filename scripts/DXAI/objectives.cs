@@ -217,9 +217,9 @@ function AIEnhancedEngageTarget::monitor(%task, %client)
             return;
         }
         
-        %client.engageTargetLastPosition = %client.engageTarget.getWorldBoxCenter();       
-        %client.setMoveTarget(getRandomPositionOnTerrain(%client.engageTargetLastPosition, 40));     
-        %client.pressFire();
+       // %client.engageTargetLastPosition = %client.engageTarget.getWorldBoxCenter();       
+       // %client.setMoveTarget(getRandomPositionOnTerrain(%client.engageTargetLastPosition, 40));     
+        //%client.pressFire();
     }
     else if (%client.engageTargetLastPosition !$= "")
     {

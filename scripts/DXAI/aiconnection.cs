@@ -15,6 +15,7 @@
 //------------------------------------------------------------------------------------------
 function AIConnection::initialize(%this)
 {
+    %this.dangerObjects = new SimSet();
     %this.fieldOfView = $DXAI::Bot::DefaultFieldOfView;
     %this.viewDistance = $DXAI::Bot::DefaultViewDistance;
 }
@@ -197,6 +198,10 @@ function AIConnection::updateLegs(%this)
     %delta = %now - %this.lastUpdateLegs;
     %this.lastUpdateLegs = %now;
     
+    // Set any danger we may need.
+    for (%iteration = 0; %iteration < %this.dangerObjects.getCount(); %iteration++)
+        %this.setDangerLocation(%this.dangerObjects.getObject(%iteration).getPosition(), 3);
+    
     if (%this.isMovingToTarget)
     {
         if (%this.aimAtLocation)
@@ -225,23 +230,52 @@ function AIConnection::updateLegs(%this)
 //------------------------------------------------------------------------------------------
 function AIConnection::updateWeapons(%this)
 {
+    %lockedObject = %this.player;
+    %mount = %this.player.getObjectMount();
+    
+    if (isObject(%mount))
+        %lockedObject = %mount;
+     
+    // FIXME: Toss %this.player.lockedCount grenades, this will toss all of them basically instantly.
+    if (%lockedObject.isLocked() && %this.player.invFlareGrenade != 0)
+    {
+        %this.pressGrenade();
+    }
+    
     if (isObject(%this.engageTarget))
     {
         %player = %this.player;
         %targetDistance = vectorDist(%player.getPosition(), %this.engageTarget.getPosition());
             
         // Firstly, just aim at them for now
-        %this.aimAt(%this.engageTarget.getWorldBoxCenter());
-            
+        %this.aimAt(%this.engageTarget.getPosition());
+
         // What is our current best weapon? Right now we just check target distance and weapon spread.
         %bestWeapon = 0;
             
         for (%iteration = 0; %iteration < %player.weaponSlotCount; %iteration++)
         {
+            %currentWeapon = %player.weaponSlot[%iteration];
+            %currentWeaponImage = %currentWeapon.image;
+            
+            // No ammo?
+            if (isObject(%currentWeaponImage.ammo) && %this.player.inv[%currentWeaponImage.ammo] <= 0)
+                continue;
+            
+            if (%currentWeaponImage.projectileSpread >= 3 && %targetDistance <= 20)
+                %bestWeapon = %iteration;
+            else if (%currentWeaponImage.projectileSpread < 3 && %targetDistance >= 20)
+                %bestWeapon = %iteration;
+            else if (%targetDistance >= 100 && %currentWeaponImage.projectileType $= "GrenadeProjectile")
+                %bestWeapon = %iteration;
+            
         // Weapons with a decent bit of spread should be used <= 20m
+        // Arced & precision Weapons should be used at >= 100m
+            
         }
             
         %player.selectWeaponSlot(%bestWeapon);
+        %this.pressFire(200);
     }
 }
 
@@ -266,7 +300,7 @@ function AIConnection::updateVisualAcuity(%this)
     // If we can't even see or if we're downright dead, don't do anything.
     if (%this.visibleDistance = 0 || !isObject(%this.player) || %this.player.getState() !$= "Move")
     {
-        %this.visualAcuityTick = %this.schedule(getRandom($DXAI::Bot::MinimumVisualAcuityTime, $DXAI::Bot::MaximumVisualAcuityTime,), "updateVisualAcuity");
+        %this.visualAcuityTick = %this.schedule(getRandom($DXAI::Bot::MinimumVisualAcuityTime, $DXAI::Bot::MaximumVisualAcuityTime), "updateVisualAcuity");
         return;
     }
     
@@ -322,7 +356,11 @@ function AIConnection::updateVisualAcuity(%this)
         %noticeTime = getRandom(700, 1200);
         if (%this.awarenessTime[%current] < %noticeTime)
             continue;
-        
+            
+        // Is it a object we want to avoid?
+        if (AIGrenadeSet.isMember(%current))
+            %this.dangerObjects.add(%current);
+  
         if (%current.getType() & $TypeMasks::ProjectileObjectType)
         {               
             %className = %current.getClassName();

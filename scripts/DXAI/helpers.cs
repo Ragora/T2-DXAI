@@ -230,9 +230,10 @@ function GameConnection::getObjectsInViewcone(%this, %typeMask, %distance, %perf
                 
                 %hitObject = getWord(%raycast, 0);
                 
-                // Since the engine doesn't do raycasts against projectiles correctly, we just check if the bot
+                // Since the engine doesn't do raycasts against projectiles & items correctly, we just check if the bot
                 // hit -nothing- when doing the raycast rather than checking for a hit against the object
-                if (%hitObject == %currentObject || (%currentObject.getType() & $TypeMasks::ProjectileObjectType && !isObject(%hitObject)))
+                %workaroundTypes = $TypeMasks::ProjectileObjectType | $TypeMasks::ItemObjectType;
+                if (%hitObject == %currentObject || (%currentObject.getType() & %workaroundTypes && !isObject(%hitObject)))
                     %result.add(%currentObject);
             }
         }

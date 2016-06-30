@@ -64,6 +64,9 @@ Planned and implemented Features:
 - Partially implemented; only works correctly for some tasks.
 - [ ] Bots pick the best weapon in their inventory during engagement using either weapon meta data or data gleamed from the profiler.
 - [ ] Bots return to base to rearm when sufficiently out of ammo or low on health.
+- [ ] Bots coordinate on field. For example, some scouts escorting a heavy that will mortar some stuff.
+- [ ] Bots repair destroyed base assets.
+- [ ] Bots deploy motion sensors, pulse sensors, spider clamps and spike turrets.
 
 Planned and supported gamemodes:
 - [ ] CTF

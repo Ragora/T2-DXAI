@@ -5,7 +5,7 @@
 //
 // The AICommander type is a complex beast. They have the following proerties associated
 // with them:
-//      * %commander.botList: A SimSet of all bots that are currently associated with the 
+//      * %commander.botList: A SimSet of all bots that are currently associated with the
 // given commander.
 //      * %commander.idleBotList: A SimSet of all bots that are currently considered be idle.
 // These bots were not explicitly given anything to do by the commander AI and so they are
@@ -13,7 +13,7 @@
 //      * %commander.botAssignments[%assignmentID]: An associative container that maps
 // assignment ID's (those desiginated by $DXAI::Priorities::*) to the total number of
 // bots assigned.
-//      * %commander.objectiveCycles[%assignmentID]: An associative container that maps assignment 
+//      * %commander.objectiveCycles[%assignmentID]: An associative container that maps assignment
 // ID's (those desiginated by $DXAI::Priorities::*) to an instance of a CyclicSet which contains
 // the ID's of AI nav graph placed objective markers to allow for cycling through the objectives
 // set for the team.
@@ -28,24 +28,26 @@ $DXAI::Priorities::DefendGenerator = 0;
 $DXAI::Priorities::DefendFlag = 1;
 $DXAI::Priorities::ScoutBase = 2;
 //-----------------------------------------------
-$DXAI::Priorities::CaptureFlag = 4;
+$DXAI::Priorities::CaptureFlag = 3;
 $DXAI::Priorities::CaptureObjective = 5;
 $DXAI::Priorities::AttackTurret = 6;
-$DXAI::Priorities::Count = 3;
+$DXAI::Priorities::Count = 4;
 
 //------------------------------------------------------------------------------------------
-// Description: These global variables are the default priorities that commanders will 
-// initialize with for specific tasks that can be distributed to the bots on the team. 
-// 
+// Description: These global variables are the default priorities that commanders will
+// initialize with for specific tasks that can be distributed to the bots on the team.
+//
 // NOTE: These should be fairly laid back initially and allow for a good count of idle bots.
 //------------------------------------------------------------------------------------------
 $DXAI::Priorities::DefaultPriorityValue[$DXAI::Priorities::DefendGenerator] = 2;
 $DXAI::Priorities::DefaultPriorityValue[$DXAI::Priorities::DefendFlag] = 3;
 $DXAI::Priorities::DefaultPriorityValue[$DXAI::Priorities::ScoutBase] = 1;
+$DXAI::Priorities::DefaultPriorityValue[$DXAI::Priorities::CaptureFlag] = 2;
 
 $DXAI::Priorities::Text[$DXAI::Priorities::DefendGenerator] = "Defending a Generator";
 $DXAI::Priorities::Text[$DXAI::Priorities::DefendFlag] = "Defending the Flag";
 $DXAI::Priorities::Text[$DXAI::Priorities::ScoutBase] = "Scouting a Location";
+$DXAI::Priorities::Text[$DXAI::Priorities::CaptureFlag] = "Capture the Flag";
 
 //------------------------------------------------------------------------------------------
 // Description: Sets up the AI commander by creating the bot list sim sets as well as
@@ -53,32 +55,32 @@ $DXAI::Priorities::Text[$DXAI::Priorities::ScoutBase] = "Scouting a Location";
 // independent ticks started up such as the visual acuity tick.
 //------------------------------------------------------------------------------------------
 function AICommander::setup(%this)
-{    
+{
     %this.botList = new SimSet();
     %this.idleBotList = new SimSet();
-    
+
     for (%iteration = 0; %iteration < ClientGroup.getCount(); %iteration++)
     {
         %currentClient = ClientGroup.getObject(%iteration);
-        
+
         if (%currentClient.isAIControlled() && %currentClient.team == %this.team)
         {
             %this.botList.add(%currentClient);
             %this.idleBotList.add(%currentClient);
-            
+
             %currentClient.commander = %this;
-            
+
             %currentClient.initialize();
             %currentClient.visibleHostiles = new SimSet();
-            
+
             // Start our ticks.
             %currentClient.updateVisualAcuity();
             %currentClient.stuckCheck();
         }
     }
-    
+
     %this.setDefaultPriorities();
-    
+
     // Also set the assignment tracker and the cyclers for each objective type
     for (%iteration = 0; %iteration < $DXAI::Priorities::Count; %iteration++)
     {
@@ -100,7 +102,7 @@ function AICommander::_skimObjectiveGroup(%this, %group)
     for (%iteration = 0; %iteration < %group.getCount(); %iteration++)
     {
         %current = %group.getObject(%iteration);
-        
+
         // We're getting ballsy here, recursion in TS!
         if (%current.getClassName() $= "SimGroup")
             %this._skimObjectiveGroup(%current);
@@ -114,13 +116,13 @@ function AICommander::_skimObjectiveGroup(%this, %group)
                 case "AIODefendLocation":
                     // FIXME: Console spam from .targetObjectID not being set?
                     %datablockName = %current.targetObjectID.getDatablock().getName();
-                                        
+
                     // Defending the flag?
                     if (%datablockName $= "FLAG")
                         %this.objectiveCycles[$DXAI::Priorities::DefendFlag].add(%current);
                     else if (%datablockName $="GeneratorLarge")
-                        %this.objectiveCycles[$DXAI::Priorities::DefendGenerator].add(%current);           
-                    
+                        %this.objectiveCycles[$DXAI::Priorities::DefendGenerator].add(%current);
+
                 case "AIORepairObject":
                 case "AIOTouchObject":
                 case "AIODeployEquipment":
@@ -139,13 +141,13 @@ function AICommander::loadObjectives(%this)
     // First we clear the old cyclers
     for (%iteration = 0; %iteration < $DXAI::Priorities::Count; %iteration++)
         %this.objectiveCycles[%iteration].clear();
-    
+
     %teamGroup = "Team" @ %this.team;
     %teamGroup = nameToID(%teamGroup);
-    
+
     if (!isObject(%teamGroup))
         return;
-    
+
     // Search this group for something named "AIObjectives". Each team has one, so we can't reliably just use that name
     %group = %teamGroup;
     for (%iteration = 0; %iteration < %group.getCount(); %iteration++)
@@ -157,20 +159,20 @@ function AICommander::loadObjectives(%this)
             break;
         }
     }
-    
+
     if (%group == %teamGroup)
         return;
-    
+
     // Now that we have our objective set, skim it for anything usable
     %this._skimObjectiveGroup(%group);
-    
+
     // We also need to determine some locations for objectives not involved in the original game, such as the AIEnhancedScout task.
-    
+
     // Simply create a scout objective on the flag with a distance of 100m
     %scoutLocationObjective = new ScriptObject() { distance = 100; };
     %defendFlagObjective = %this.objectiveCycles[$DXAI::Priorities::DefendFlag].next();
     %scoutLocationObjective.location = %defendFlagObjective.location;
-    
+
     %this.objectiveCycles[$DXAI::Priorities::ScoutBase].add(%scoutLocationObjective);
 }
 
@@ -193,18 +195,19 @@ function AICommander::assignTasks(%this)
       %bot.addTask(AIEnhancedEngageTarget);
       %bot.addTask(AIEnhancedRearmTask);
       %bot.addTask(AIEnhancedPathCorrectionTask);
-      
+
       // We only need this task if we're actually playing CTF.
       if ($CurrentMissionType $= "CTF")
       {
         %bot.addTask(AIEnhancedReturnFlagTask);
         %bot.addTask(AIEnhancedFlagCaptureTask);
       }
-      
-      %bot.targetLoadout = 0;
+
+      // Assign the default loadout
+      %bot.targetLoadout = $DXAI::DefaultLoadout ;
       %bot.shouldRearm = true;
     }
-    
+
     // Calculate how much priority we have total
     %totalPriority = 0.0;
     for (%iteration = 0; %iteration < $DXAI::Priorities::Count; %iteration++)
@@ -212,10 +215,10 @@ function AICommander::assignTasks(%this)
         %totalPriority += %this.priorities[%iteration];
         %botAssignments[%iteration] = 0;
     }
-    
+
     // We create a priority queue preemptively so we can sort task priorities as we go and save a little bit of time
     %priorityQueue = PriorityQueue::create();
-        
+
     // Now calculate how many bots we need per objective, and count how many we will need in total
     %lostBots = false; // Used for a small optimization
     %botCountRequired = 0;
@@ -232,7 +235,7 @@ function AICommander::assignTasks(%this)
             echo(%botAssignments[%iteration] SPC " bots on task " @ $DXAI::Priorities::Text[%iteration]);
         }
     }
-    
+
     // Deassign from objectives we need less bots for now and put them into the idle list
     // When we lose bots, our %botAssignments[%task] value will be a negative, so we just need
     // to ditch mAbs(%botAssignments[%task]) bots from that given task.
@@ -240,7 +243,7 @@ function AICommander::assignTasks(%this)
         // Need to ditch some bots
         if (%botAssignments[%taskIteration] < 0)
             %this.deassignBots(%taskIteration, mAbs(%botAssignments[%taskIteration]));
-    
+
     // Do we have enough idle bots to just shunt everyone into something?
     if (%this.idleBotList.getCount() >= %botCountRequired)
     {
@@ -259,7 +262,7 @@ function AICommander::assignTasks(%this)
             for (%botIteration = 0; %botIteration < %requiredBots && %this.idleBotList.getCount() != 0; %botIteration++)
                 %this.assignTask(%taskID, %this.idleBotList.getObject(0));
         }
-    
+
     // Regardless, we need to make sure we cleanup the queue
     // FIXME: Perhaps just create one per commander and reuse it?
     %priorityQueue.delete();
@@ -281,7 +284,7 @@ function AICommander::deassignBots(%this, %taskID, %count)
             %count--;
         }
     }
-    
+
     return %count == 0;
 }
 
@@ -290,18 +293,18 @@ function AICommander::assignTask(%this, %taskID, %bot)
     // Don't try to assign if the bot is already assigned something
     if (!%this.idleBotList.isMember(%bot))
         return;
-    
+
     %this.idleBotList.remove(%bot);
-    
+
     switch (%taskID)
     {
         case $DXAI::Priorities::DefendGenerator or $DXAI::Priorities::DefendFlag:
             %objective = %this.objectiveCycles[%taskID].next();
-            
+
             // Set the bot to defend the location
             %bot.defendTargetLocation = %objective.location;
             %datablockName = %objective.targetObjectID.getDatablock().getName();
-            
+
             switch$(%datablockName)
             {
                 case "FLAG":
@@ -309,18 +312,24 @@ function AICommander::assignTask(%this, %taskID, %bot)
                 case "GeneratorLarge":
                     %bot.defenseDescription = "generator";
             }
-                  
-            %bot.addTask("AIEnhancedDefendLocation");
-            
+
+            %bot.primaryTask = "AIEnhancedDefendLocation";
+            %bot.addTask(%bot.primaryTask);
+
         case $DXAI::Priorities::ScoutBase:
             %objective = %this.objectiveCycles[%taskID].next();
-            
+
             // Set the bot to defend the location
             %bot.scoutTargetLocation = %objective.location;
             %bot.scoutDistance = %objective.distance;
-            %bot.addTask("AIEnhancedScoutLocation");
+
+            %bot.primaryTask = "AIEnhancedScoutLocation";
+            %bot.addTask(%bot.primaryTask);
+
+        case $DXAI::Priorities::CaptureFlag:
+            %bot.shouldRunFlag = true;
     }
-    
+
     %this.botAssignments[%taskID]++;
     %bot.assignment = %taskID;
 }
@@ -336,7 +345,7 @@ function AICommander::setDefaultPriorities(%this)
 }
 
 //------------------------------------------------------------------------------------------
-// Description: Performs a deinitialization that should be ran before deleting the 
+// Description: Performs a deinitialization that should be ran before deleting the
 // commander object itself.
 //
 // NOTE: This is called automatically by .delete so this shouldn't have to be called
@@ -350,7 +359,7 @@ function AICommander::cleanUp(%this)
         cancel(%current.visualAcuityTick);
         cancel(%current.stuckCheckTick);
     }
-    
+
     %this.botList.delete();
     %this.idleBotList.delete();
 }
@@ -379,7 +388,7 @@ function AICommander::removeBot(%this, %bot)
 {
     %this.botList.remove(%bot);
     %this.idleBotList.remove(%bot);
-    
+
     %bot.commander = -1;
 }
 
@@ -394,10 +403,10 @@ function AICommander::addBot(%this, %bot)
 {
     if (%bot.team != %this.team)
         return false;
-        
+
     %this.botList.add(%bot);
     %this.idleBotList.add(%bot);
-    
+
     %bot.commander = %this;
     return true;
 }
@@ -409,7 +418,7 @@ function AICommander::notifyPlayerDeath(%this, %killedClient, %killedByClient)
 function AICommander::notifyFlagGrab(%this, %grabbedByClient)
 {
     %this.priority[$DXAI::Priorities::DefendFlag]++;
-    
+
     // ...well, balls, someone nipped me flag! Are there any bots sitting around being lazy?
     // TODO: We should also include nearby scouting bots into this, as well.
     if (%this.idleBotList.getCount() != 0)

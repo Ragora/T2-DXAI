@@ -148,6 +148,77 @@ function GameConnection::getClosestInventory(%this)
   return %closestInventory;
 }
 
+function Player::getFacingAngle(%this)
+{
+    %vector = vectorNormalize(%this.getMuzzleVector($WeaponSlot));
+    return mAtan(getWord(%vector, 1), getWord(%vector, 0));
+}
+
+function Player::getViewConeIntersection(%this, %target, %maxDistance, %viewAngle)
+{
+    %myPosition = %this.getPosition();
+    %targetPosition = %target.getPosition();
+
+    if (vectorDist(%myPosition, %targetPosition) > %maxDistance)
+        return false;
+
+    %offset = vectorNormalize(vectorSub(%targetPosition, %myPosition));
+    %enemyAngle = mAtan(getWord(%offset, 1), getWord(%offset, 0));
+    %myAngle = %this.getFacingAngle();
+
+    %angle = %enemyAngle - %myAngle;
+
+    %viewMax = %viewAngle / 2;
+    %viewMin = -(%viewAngle / 2);
+
+    if (%angle >= %viewMin && %angle <= %viewMax)
+        return true;
+
+    return false;
+}
+
+function Player::getPackName(%this)
+{
+    %item = %this.getMountedImage(2).item;
+
+    if (!isObject(%item))
+        return "";
+
+    return %item.getName();
+}
+
+function Player::canSeeObject(%this, %target, %maxDistance, %viewAngle)
+{
+    if (%target.isCloaked() || !%this.getViewConeIntersection(%target, %maxDistance, %viewAngle))
+        return false;
+
+    %coneOrigin = %this.getPosition();
+
+    // Try to raycast the object
+    %rayCast = containerRayCast(%coneOrigin, %target.getWorldBoxCenter(), $TypeMasks::AllObjectType, %this);
+    %hitObject = getWord(%raycast, 0);
+
+    // Since the engine doesn't do raycasts against projectiles & items correctly, we just check if the bot
+    // hit -nothing- when doing the raycast rather than checking for a hit against the object
+    %workaroundTypes = $TypeMasks::ProjectileObjectType | $TypeMasks::ItemObjectType;
+
+    if (%hitObject == %target || (%target.getType() & %workaroundTypes && !isObject(%hitObject)))
+        return true;
+
+    return false;
+}
+
+function Precipitation::isCloaked(%this) { return false; }
+function LinearProjectile::isCloaked(%this) { return false; }
+function LinearFlareProjectile::isCloaked(%this) { return false; }
+function GrenadeProjectile::isCloaked(%this) { return false; }
+function SniperProjectile::isCloaked(%this) { return false; }
+
+function Player::getBackwardsVector(%this)
+{
+    return vectorScale(%this.getForwardVector(), -1);
+}
+
 //------------------------------------------------------------------------------------------
 // Description: Calculates a list of objects that can be seen by the given client using
 // distance & field of view values passed in for evaluation.
@@ -176,43 +247,22 @@ function GameConnection::getObjectsInViewcone(%this, %typeMask, %distance, %perf
     if (%distance $= "")
         %distance = %this.viewDistance;
 
-    %viewCone = %this.calculateViewCone(%distance);
-
-    // Extract the results: See TODO above ::calculateViewCone implementation
-    %coneOrigin = getWords(%viewCone, 0, 2);
-    %viewConeClockwiseVector = getWords(%viewCone, 3, 5);
-    %viewConeCounterClockwiseVector = getWords(%viewCone, 6, 8);
-    %viewConeUpperVector = getWords(%viewCone, 9, 11);
-    %viewConeLowerVector = getWords(%viewCone, 12, 14);
-
     %result = new SimSet();
+
+    %coneOrigin = %this.player.getPosition();
 
     // Doing a radius search should hopefully be faster than iterating over all objects in MissionCleanup.
     // Even if the game did that internally it's definitely faster than doing it in TS
     InitContainerRadiusSearch(%coneOrigin, %distance, %typeMask);
     while((%currentObject = containerSearchNext()) != 0)
     {
-        if (%currentObject == %this || !isObject(%currentObject) || containerSearchCurrRadDamageDist() > %distance)
+        if (%currentObject == %this || !isObject(%currentObject) || containerSearchCurrRadDamageDist() > %distance || %currentObject.isCloaked())
             continue;
 
         // Check if the object is within both the horizontal and vertical triangles representing our view cone
-        if (%currentObject.getType() & %typeMask && pointInTriangle(%currentObject.getPosition(), %viewConeClockwiseVector, %viewConeCounterClockwiseVector, %coneOrigin) && pointInTriangle(%currentObject.getPosition(), %viewConeLowerVector, %viewConeUpperVector, %coneOrigin))
-        {
-            if (!%performLOSTest)
+        if (%currentObject.getType() & %typeMask && %this.player.getViewConeIntersection(%currentObject, %distance, %this.fieldOfView))
+            if (!%performLOSTest || %this.player.canSeeObject(%currentObject, %distance, %this.fieldOfView))
                 %result.add(%currentObject);
-            else
-            {
-                %rayCast = containerRayCast(%coneOrigin, %currentObject.getWorldBoxCenter(), $TypeMasks::AllObjectType, %this.player);
-
-                %hitObject = getWord(%raycast, 0);
-
-                // Since the engine doesn't do raycasts against projectiles & items correctly, we just check if the bot
-                // hit -nothing- when doing the raycast rather than checking for a hit against the object
-                %workaroundTypes = $TypeMasks::ProjectileObjectType | $TypeMasks::ItemObjectType;
-                if (%hitObject == %currentObject || (%currentObject.getType() & %workaroundTypes && !isObject(%hitObject)))
-                    %result.add(%currentObject);
-            }
-        }
     }
 
     return %result;
@@ -237,7 +287,7 @@ function getRandomPosition(%position, %distance, %raycast)
     if (!%raycast)
         return %result;
 
-    %rayCast = containerRayCast(%position, %result, $TypeMasks::AllObjectType, 0);
+    %rayCast = containerRayCast(%position, %result, $TypeMasks::InteriorObjectType | $TypeMasks::StaticShapeObjectType, 0);
     %result = getWords(%raycast, 1, 3);
 
     return %result;
@@ -255,6 +305,23 @@ function getRandomPositionOnTerrain(%position, %distance)
 {
     %result = getRandomPosition(%position, %distance);
     return setWord(%result, 2, getTerrainHeight(%result));
+}
+
+function getRandomPositionInInterior(%position, %distance)
+{
+    %firstPass = getRandomPosition(%position, %distance, true);
+
+    %rayCast = containerRayCast(%position, vectorAdd(%position, "0 0 -9000"), $TypeMasks::InteriorObjectType | $TypeMasks::StaticShapeObjectType, 0);
+
+    if (%rayCast == -1)
+        return %firstPass;
+
+    return getWords(%raycast, 1, 3);
+}
+
+function getRandomFloat(%min, %max)
+{
+    return %min + (getRandom() * (%max - %min));
 }
 
 //------------------------------------------------------------------------------------------

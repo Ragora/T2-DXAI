@@ -1,11 +1,11 @@
 //------------------------------------------------------------------------------------------
 // aiconnection.cs
 // Source file declaring the custom AIConnection methods used by the DXAI experimental
-// AI enhancement project. 
+// AI enhancement project.
 // https://github.com/Ragora/T2-DXAI.git
 //
 // Copyright (c) 2015 Robert MacGregor
-// This software is licensed under the MIT license. 
+// This software is licensed under the MIT license.
 // Refer to LICENSE.txt for more information.
 //------------------------------------------------------------------------------------------
 
@@ -36,7 +36,7 @@ function AIConnection::update(%this)
 
 //------------------------------------------------------------------------------------------
 // Description: Called by the main system when a hostile projectile impacts near the bot.
-// This ideally is supposed to trigger some search logic instead of instantly knowing 
+// This ideally is supposed to trigger some search logic instead of instantly knowing
 // where the shooter is like the original AI did.
 //
 // NOTE: This is automatically called by the main system and therefore should not be called
@@ -58,8 +58,19 @@ function AIConnection::isIdle(%this)
 {
     if (!isObject(%this.commander))
         return true;
-    
+
     return %this.commander.idleBotList.isMember(%this);
+}
+
+function AIConnection::runJets(%this, %timeMS)
+{
+    %this.shouldJet = true;
+    %this.schedule(%timeMS, "_cancelJets");
+}
+
+function AIConnection::_cancelJets(%this)
+{
+    %this.shouldJet = false;
 }
 
 //------------------------------------------------------------------------------------------
@@ -69,7 +80,7 @@ function AIConnection::isIdle(%this)
 function AIConnection::reset(%this)
 {
   //  AIUnassignClient(%this);
-    
+
     %this.stop();
    // %this.clearTasks();
     %this.clearStep();
@@ -80,14 +91,14 @@ function AIConnection::reset(%this)
     %this.setTargetObject(-1);
     %this.pilotVehicle = false;
     %this.defaultTasksAdded = false;
-    
+
     if (isObject(%this.controlByHuman))
         aiReleaseHumanControl(%this.controlByHuman, %this);
 }
 
 //------------------------------------------------------------------------------------------
 // Description: Tells the AIConnection to move to a given position. They will automatically
-// plot a path and attempt to navigate there. 
+// plot a path and attempt to navigate there.
 // Param %position: The target location to move to. If this is simply -1, then all current
 // moves will be cancelled.
 //
@@ -104,13 +115,14 @@ function AIConnection::setMoveTarget(%this, %position)
         %this.isFollowingTarget = false;
         return;
     }
-    
+
     %this.moveTarget = %position;
     %this.isMovingToTarget = true;
     %this.isFollowingTarget = false;
+
     %this.setPath(%position);
     %this.stepMove(%position);
-    
+
     %this.minimumPathDistance = 9999;
     %this.maximumPathDistance = -9999;
 }
@@ -139,16 +151,16 @@ function AIConnection::setFollowTarget(%this, %target, %minDistance, %maxDistanc
         %this.isMovingToTarget = false;
         %this.isFollowingTarget = false;
     }
-    
+
     if (!isObject(%target))
         return;
-        
+
     %this.followTarget = %target;
     %this.isFollowingTarget = true;
     %this.followMinDistance = %minDistance;
     %this.followMaxDistance = %maxDistance;
     %this.followHostile = %hostile;
-    
+
     %this.stepEscort(%target);
 }
 
@@ -165,22 +177,22 @@ function AIConnection::stuckCheck(%this)
 {
     if (isEventPending(%this.stuckCheckTick))
         cancel(%this.stuckCheckTick);
-    
+
     %targetDistance = %this.pathDistRemaining(9000);
     if (!%this.isMovingToTarget || !isObject(%this.player) || %this.player.getState() !$= "Move" || %targetDistance <= 5)
     {
         %this.stuckCheckTick = %this.schedule(5000, "stuckCheck");
         return;
     }
-        
+
     if (!%this.isPathCorrecting && %targetDistance >= %this.minimumPathDistance && %this.minimumPathDistance != 9999)
-        %this.isPathCorrecting = true;           
-   
+        %this.isPathCorrecting = true;
+
     if (%targetDistance > %this.maximumPathDistance)
         %this.maximumPathDistance = %targetDistance;
     if (%targetDistance < %this.minimumPathDistance)
         %this.minimumPathDistance = %targetDistance;
-    
+
     %this.stuckCheckTick = %this.schedule(5000, "stuckCheck");
 }
 
@@ -197,11 +209,30 @@ function AIConnection::updateLegs(%this)
     %now = getSimTime();
     %delta = %now - %this.lastUpdateLegs;
     %this.lastUpdateLegs = %now;
-    
+
+    // Check the grenade set for anything we'll want to avoid (and can see)
+    for (%iteration = 0; %iteration < AIGrenadeSet.getCount(); %iteration++)
+    {
+        %grenade = AIGrenadeSet.getObject(%iteration);
+
+        if (%this.player.canSeeObject(%grenade, 10, %this.fieldOfView))
+            %this.dangerObjects.add(%grenade);
+    }
+
     // Set any danger we may need.
     for (%iteration = 0; %iteration < %this.dangerObjects.getCount(); %iteration++)
         %this.setDangerLocation(%this.dangerObjects.getObject(%iteration).getPosition(), 3);
-    
+
+    if (%this.shouldJet && !%this.player.isJetting())
+    {
+        %this.pressJump();
+
+        if (!isEventPending(%this.jetSchedule))
+            %this.jetSchedule = %this.schedule(128, "pressJet");
+    }
+    else if (%this.shouldJet)
+        %this.pressJet();
+
     if (%this.isMovingToTarget)
     {
         if (%this.aimAtLocation)
@@ -211,7 +242,7 @@ function AIConnection::updateLegs(%this)
     }
     else if (%this.isFollowingTarget)
     {
-        
+
     }
     else
     {
@@ -219,6 +250,14 @@ function AIConnection::updateLegs(%this)
         %this.clearStep();
     }
 }
+
+function AITask::getWeightFreq(%this) { return %this.weightFreq; }
+
+function AITask::getMonitorFreq(%this) { return %this.monitorFreq; }
+
+function AITask::getWeightTimeMS(%this) { return %this.getWeightFreq() * 32; }
+
+function AITask::getMonitorTimeMS(%this) { return %this.getMonitorFreq() * 32; }
 
 //------------------------------------------------------------------------------------------
 // Description: A function called by the ::update function of the AIConnection that is
@@ -232,55 +271,55 @@ function AIConnection::updateWeapons(%this)
 {
     %lockedObject = %this.player;
     %mount = %this.player.getObjectMount();
-    
+
     if (isObject(%mount))
         %lockedObject = %mount;
-     
+
     // FIXME: Toss %this.player.lockedCount grenades, this will toss all of them basically instantly.
     if (%lockedObject.isLocked() && %this.player.invFlareGrenade != 0)
     {
         %this.pressGrenade();
     }
-    
+
     if (isObject(%this.engageTarget))
     {
         %player = %this.player;
         %targetDistance = vectorDist(%player.getPosition(), %this.engageTarget.getPosition());
-            
+
         // Firstly, just aim at them for now
         %this.aimAt(%this.engageTarget.getPosition());
 
         // What is our current best weapon? Right now we just check target distance and weapon spread.
         %bestWeapon = 0;
-            
+
         for (%iteration = 0; %iteration < %player.weaponSlotCount; %iteration++)
         {
             %currentWeapon = %player.weaponSlot[%iteration];
             %currentWeaponImage = %currentWeapon.image;
-            
+
             // No ammo?
             if (%currentWeapon.usesAmmo && %this.player.inv[%currentWeapon.ammoDB] <= 0)
                 continue;
-            
+
             if (%targetDistance <= %currentWeapon.dryEffectiveRange)
                 %bestWeapon = %iteration;
            // else if (%currentWeapon.spread < 3 && %targetDistance >= 20)
             //    %bestWeapon = %iteration;
            // else if (%targetDistance >= 100 && %currentWeapon.projectileType $= "GrenadeProjectile")
            //     %bestWeapon = %iteration;
-            
+
         // Weapons with a decent bit of spread should be used <= 20m
         // Arced & precision Weapons should be used at >= 100m
-            
+
         }
-            
+
         %player.selectWeaponSlot(%bestWeapon);
         %this.pressFire(200);
     }
 }
 
 //------------------------------------------------------------------------------------------
-// Description: A function called randomly on time periods between 
+// Description: A function called randomly on time periods between
 // $DXAI::Bot::MinimumVisualAcuityTime and $DXAI::Bot::MaximumVisualAcuityTime which
 // attempts to simulate Human eyesight using a complex view cone algorithm implemented
 // entirely in Torque Script.
@@ -296,100 +335,64 @@ function AIConnection::updateVisualAcuity(%this)
 {
     if (isEventPending(%this.visualAcuityTick))
         cancel(%this.visualAcuityTick);
-    
+
     // If we can't even see or if we're downright dead, don't do anything.
     if (%this.visibleDistance = 0 || !isObject(%this.player) || %this.player.getState() !$= "Move")
     {
         %this.visualAcuityTick = %this.schedule(getRandom($DXAI::Bot::MinimumVisualAcuityTime, $DXAI::Bot::MaximumVisualAcuityTime), "updateVisualAcuity");
         return;
     }
-    
-    // The visual debug feature is a system in which we can use waypoints to view the bot's calculated viewcone per tick.
-    if (%this.enableVisualDebug)
-    {
-        if (!isObject(%this.originMarker))
-        {
-            %this.originMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %this.team; name = %this.namebase SPC " Origin"; };
-            %this.clockwiseMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %this.team; name = %this.namebase SPC " Clockwise"; };
-            %this.counterClockwiseMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %this.team; name = %this.namebase SPC " Counter Clockwise"; };
-            %this.upperMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %this.team; name = %this.namebase SPC " Upper"; };
-            %this.lowerMarker = new Waypoint(){ datablock = "WaypointMarker"; team = %this.team; name = %this.namebase SPC " Lower"; };
-        }
-            
-        %viewCone = %this.calculateViewCone();
-        %coneOrigin = getWords(%viewCone, 0, 2);
-        %viewConeClockwiseVector = getWords(%viewCone, 3, 5);
-        %viewConeCounterClockwiseVector = getWords(%viewCone, 6, 8);
-        
-        %viewConeUpperVector = getWords(%viewCone, 9, 11);
-        %viewConeLowerVector = getWords(%viewCone, 12, 14);
-        
-        // Update all the markers
-        %this.clockwiseMarker.setPosition(%viewConeClockwiseVector);
-        %this.counterClockwiseMarker.setPosition(%viewConeCounterClockwiseVector);
-        %this.upperMarker.setPosition(%viewConeUpperVector);
-        %this.lowerMarker.setPosition(%viewConeLowerVector);
-        %this.originMarker.setPosition(%coneOrigin);
-    }
-    else if (isObject(%this.originMarker))
-    {
-        %this.originMarker.delete();
-        %this.clockwiseMarker.delete();
-        %this.counterClockwiseMarker.delete();
-        %this.upperMarker.delete();
-        %this.lowerMarker.delete();
-    }
-   
+
     %now = getSimTime();
     %deltaTime = %now - %this.lastVisualAcuityUpdate;
     %this.lastVisualAcuityUpdate = %now;
-    
+
     %visibleObjects = %this.getObjectsInViewcone($TypeMasks::ProjectileObjectType | $TypeMasks::PlayerObjectType, %this.viewDistance, true);
 
     for (%iteration = 0; %iteration < %visibleObjects.getCount(); %iteration++)
     {
         %current = %visibleObjects.getObject(%iteration);
-            
+
         %this.awarenessTime[%current] += %deltaTime;
-        
+
         // Did we "notice" the object yet?
         %noticeTime = getRandom(700, 1200);
         if (%this.awarenessTime[%current] < %noticeTime)
             continue;
-            
+
         // Is it a object we want to avoid?
         if (AIGrenadeSet.isMember(%current))
             %this.dangerObjects.add(%current);
-  
-        if (%current.getType() & $TypeMasks::ProjectileObjectType)
-        {               
+
+        if (%current.getType() & $TypeMasks::ProjectileObjectType && %current.sourceObject != %this.player)
+        {
             %className = %current.getClassName();
-            
+
             // LinearFlareProjectile and LinearProjectile have linear trajectories, so we can easily determine if a dodge is necessary
             if (%className $= "LinearFlareProjectile" || %className $= "LinearProjectile")
             {
                 //%this.setDangerLocation(%current.getPosition(), 20);
-                
+
                 // Perform a raycast to determine a hitpoint
                 %currentPosition = %current.getPosition();
-                %rayCast = containerRayCast(%currentPosition, vectorAdd(%currentPosition, vectorScale(%current.initialDirection, 200)), -1, 0);     
+                %rayCast = containerRayCast(%currentPosition, vectorAdd(%currentPosition, vectorScale(%current.initialDirection, 200)), -1, 0);
                 %hitObject = getWord(%raycast, 0);
-                                
+
                 // We're set for a direct hit on us!
                 if (%hitObject == %this.player)
                 {
                     %this.setDangerLocation(%current.getPosition(), 30);
                     continue;
                 }
-                
+
                 // If there is no radius damage, don't worry about it now
                 if (!%current.getDatablock().hasDamageRadius)
                     continue;
-                
+
                 // How close is the hit loc?
                 %hitLocation = getWords(%rayCast, 1, 3);
                 %hitDistance = vectorDist(%this.player.getPosition(), %hitLocation);
-                
+
                 // Is it within the radius damage of this thing?
                 if (%hitDistance <= %current.getDatablock().damageRadius)
                     %this.setDangerLocation(%current.getPosition(), 30);
@@ -397,21 +400,22 @@ function AIConnection::updateVisualAcuity(%this)
             // A little bit harder to detect.
             else if (%className $= "GrenadeProjectile")
             {
-                
+
             }
         }
         // See a player?
         else if (%current.getType() & $TypeMasks::PlayerObjectType && %current.client.team != %this.team)
         {
             %this.visibleHostiles.add(%current);
+
             //%this.clientDetected(%current);
            // %this.clientDetected(%current.client);
-            
+
             // ... if the moron is right there in our LOS then we probably should see them
            // %start = %this.player.getPosition();
            // %end = vectorAdd(%start, vectorScale(%this.player.getEyeVector(), %this.viewDistance));
-            
-           // %rayCast = containerRayCast(%start, %end, -1, %this.player);     
+
+           // %rayCast = containerRayCast(%start, %end, -1, %this.player);
            // %hitObject = getWord(%raycast, 0);
 
            // if (%hitObject == %current)
@@ -421,12 +425,12 @@ function AIConnection::updateVisualAcuity(%this)
            // }
         }
     }
-    
+
     // Now we run some logic on some things that we no longer can see.
     for (%iteration = 0; %iteration < %this.visibleHostiles.getCount(); %iteration++)
     {
         %current = %this.visibleHostiles.getObject(%iteration);
-        
+
         if (%this.visibleHostiles.isMember(%current) && !%visibleObjects.isMember(%current))
         {
             %this.awarenessTime[%current] -= %deltaTime;
@@ -437,7 +441,7 @@ function AIConnection::updateVisualAcuity(%this)
             }
         }
     }
-        
+
     %visibleObjects.delete();
     %this.visualAcuityTick = %this.schedule(getRandom($DXAI::Bot::MinimumVisualAcuityTime, $DXAI::Bot::MaximumVisualAcuityTime), "updateVisualAcuity");
 }
